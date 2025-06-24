@@ -1,5 +1,9 @@
 # elf-magic ✨
 
+> **⚠️ UNDER CONSTRUCTION ⚠️**  
+> **This crate is in active development and has not been tested in production environments.**  
+> **APIs may change without notice. Use at your own risk.**
+
 > It just works, don't ask how.
 
 Actually, fine - here's how it works: You get a build.rs one-liner that generates compile-time ELF exports for every Solana program in your workspace.
