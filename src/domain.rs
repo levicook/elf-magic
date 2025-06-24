@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 /// Main error type for elf-magic operations
@@ -20,13 +22,18 @@ pub enum ElfMagicError {
 }
 
 /// Configuration for program discovery from package.metadata.elf-magic
-#[derive(Debug, Clone)]
-pub struct DiscoveryConfig {
+///
+/// This config specifies include/exclude glob patterns to determine
+/// which workspace members should be built as Solana programs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ManifestConfig {
+    #[serde(default)]
     pub include: Vec<String>, // Glob patterns like "programs/*"
+    #[serde(default)]
     pub exclude: Vec<String>, // Glob patterns like "programs/deprecated-*"
 }
 
-impl DiscoveryConfig {
+impl ManifestConfig {
     /// Create a config that includes everything (for testing/fallback only)
     pub fn allow_all() -> Self {
         Self {
@@ -101,8 +108,8 @@ impl Default for ProgramFilter {
     }
 }
 
-impl From<&DiscoveryConfig> for ProgramFilter {
-    fn from(config: &DiscoveryConfig) -> Self {
+impl From<&ManifestConfig> for ProgramFilter {
+    fn from(config: &ManifestConfig) -> Self {
         Self::new(config.include.clone(), config.exclude.clone())
     }
 }
@@ -112,7 +119,7 @@ impl From<&DiscoveryConfig> for ProgramFilter {
 pub struct Workspace {
     pub root_path: PathBuf,
     pub members: Vec<WorkspaceMember>,
-    pub config: DiscoveryConfig,
+    pub config: ManifestConfig,
 }
 
 /// A workspace member (crate) that might be a Solana program
@@ -125,40 +132,66 @@ pub struct WorkspaceMember {
 }
 
 /// A confirmed Solana program (has crate-type = ["cdylib"])
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SolanaProgram {
     pub name: String,
     pub path: PathBuf,
     pub manifest_path: PathBuf,
 }
 
-/// A successfully built Solana program with ELF output
-#[derive(Debug, Clone)]
-pub struct BuiltProgram {
-    pub program: SolanaProgram,
-    pub elf_path: PathBuf,
-    pub env_var_name: String, // e.g., "PROGRAM_TOKEN_MANAGER_ELF_MAGIC_PATH"
+impl fmt::Debug for SolanaProgram {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SolanaProgram")
+            .field("name", &self.name)
+            .field("path", &self.path.display())
+            .field("env_var_name", &self.env_var_name())
+            .field("constant_name", &self.constant_name())
+            .finish()
+    }
 }
 
-/// Generated constant definition for the lib.rs file
-#[derive(Debug, Clone)]
-pub struct ConstantDefinition {
-    pub name: String,    // e.g., "TOKEN_MANAGER_ELF"
-    pub env_var: String, // e.g., "PROGRAM_TOKEN_MANAGER_ELF_MAGIC_PATH"
-}
-
-/// Generated code structure
-#[derive(Debug, Clone)]
-pub struct GeneratedCode {
-    pub constants: Vec<ConstantDefinition>,
-    pub all_programs_fn: String,
+impl fmt::Display for SolanaProgram {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} ({})", self.name, self.path.display())
+    }
 }
 
 /// Result of the entire generation process
-#[derive(Debug)]
 pub struct GenerationResult {
-    pub built_programs: Vec<BuiltProgram>,
-    pub generated_code: GeneratedCode,
+    pub programs: Vec<SolanaProgram>,
+}
+
+impl fmt::Debug for GenerationResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GenerationResult")
+            .field("program_count", &self.programs.len())
+            .field("programs", &self.programs)
+            .finish()
+    }
+}
+
+impl fmt::Display for GenerationResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.programs.is_empty() {
+            write!(f, "Generated lib.rs (no Solana programs found)")
+        } else {
+            writeln!(
+                f,
+                "Generated lib.rs with {} Solana programs:",
+                self.programs.len()
+            )?;
+            for program in &self.programs {
+                writeln!(f, "  - {}", program)?;
+            }
+            Ok(())
+        }
+    }
+}
+
+impl GenerationResult {
+    pub fn new(programs: Vec<SolanaProgram>) -> Self {
+        Self { programs }
+    }
 }
 
 impl Workspace {
@@ -185,55 +218,19 @@ impl Workspace {
             })
             .collect()
     }
-
-    /// Build all provided Solana programs using cargo build-sbf
-    pub fn build_programs(
-        &self,
-        programs: &[SolanaProgram],
-    ) -> Result<Vec<BuiltProgram>, ElfMagicError> {
-        // TODO: For each program, call cargo build-sbf
-        // TODO: Determine output .so file path
-        // TODO: Generate environment variable name
-        // TODO: Return BuiltProgram with all metadata
-        todo!("implement build_programs")
-    }
 }
 
-impl GenerationResult {
-    pub fn new(built_programs: Vec<BuiltProgram>, generated_code: GeneratedCode) -> Self {
-        Self {
-            built_programs,
-            generated_code,
-        }
+impl SolanaProgram {
+    /// Generate environment variable name for this program
+    /// e.g., "token_manager" → "PROGRAM_TOKEN_MANAGER_ELF_MAGIC_PATH"
+    pub fn env_var_name(&self) -> String {
+        format!("PROGRAM_{}_ELF_MAGIC_PATH", self.name.to_uppercase())
     }
 
-    pub fn empty() -> Self {
-        Self {
-            built_programs: Vec::new(),
-            generated_code: GeneratedCode {
-                constants: Vec::new(),
-                all_programs_fn:
-                    "pub fn all_programs() -> Vec<(&'static str, &'static [u8])> {\n    vec![]\n}"
-                        .to_string(),
-            },
-        }
-    }
-}
-
-impl GeneratedCode {
-    pub fn new(constants: Vec<ConstantDefinition>) -> Self {
-        let all_programs_fn = if constants.is_empty() {
-            "pub fn all_programs() -> Vec<(&'static str, &'static [u8])> {\n    vec![]\n}"
-                .to_string()
-        } else {
-            // TODO: Generate the all_programs function body
-            todo!("implement all_programs function generation")
-        };
-
-        Self {
-            constants,
-            all_programs_fn,
-        }
+    /// Generate constant name for this program
+    /// e.g., "token_manager" → "TOKEN_MANAGER_ELF"
+    pub fn constant_name(&self) -> String {
+        format!("{}_ELF", self.name.to_uppercase())
     }
 }
 
@@ -291,7 +288,7 @@ mod tests {
             create_test_member("test-utils", "test-utils", vec!["lib"]),
         ];
 
-        let config = DiscoveryConfig {
+        let config = ManifestConfig {
             include: vec!["programs/*".to_string()],
             exclude: vec!["programs/deprecated-*".to_string()],
         };
@@ -315,8 +312,8 @@ mod tests {
     }
 
     #[test]
-    fn test_discovery_config_conversion() {
-        let config = DiscoveryConfig {
+    fn test_manifest_config_conversion() {
+        let config = ManifestConfig {
             include: vec!["programs/*".to_string()],
             exclude: vec!["deprecated-*".to_string()],
         };
@@ -325,5 +322,77 @@ mod tests {
 
         assert!(filter.should_include(Path::new("programs/good")));
         assert!(!filter.should_include(Path::new("deprecated-bad")));
+    }
+
+    #[test]
+    fn test_solana_program_naming() {
+        let program = SolanaProgram {
+            name: "token_manager".to_string(),
+            path: PathBuf::from("programs/token-manager"),
+            manifest_path: PathBuf::from("programs/token-manager/Cargo.toml"),
+        };
+
+        assert_eq!(
+            program.env_var_name(),
+            "PROGRAM_TOKEN_MANAGER_ELF_MAGIC_PATH"
+        );
+        assert_eq!(program.constant_name(), "TOKEN_MANAGER_ELF");
+    }
+
+    #[test]
+    fn test_solana_program_debug_display() {
+        let program = SolanaProgram {
+            name: "token-manager".to_string(),
+            path: PathBuf::from("programs/token-manager"),
+            manifest_path: PathBuf::from("programs/token-manager/Cargo.toml"),
+        };
+
+        // Test Debug - should be clean and structured with computed fields
+        let debug_output = format!("{:?}", program);
+        assert!(debug_output.contains("SolanaProgram"));
+        assert!(debug_output.contains("token-manager"));
+        assert!(debug_output.contains("programs/token-manager"));
+        assert!(debug_output.contains("env_var_name"));
+        assert!(debug_output.contains("PROGRAM_TOKEN_MANAGER_ELF_MAGIC_PATH"));
+        assert!(debug_output.contains("constant_name"));
+        assert!(debug_output.contains("TOKEN_MANAGER_ELF"));
+
+        // Test Display - should be user-friendly
+        let display_output = format!("{}", program);
+        assert_eq!(display_output, "token-manager (programs/token-manager)");
+    }
+
+    #[test]
+    fn test_generation_result_debug_display() {
+        let programs = vec![
+            SolanaProgram {
+                name: "token-manager".to_string(),
+                path: PathBuf::from("programs/token-manager"),
+                manifest_path: PathBuf::from("programs/token-manager/Cargo.toml"),
+            },
+            SolanaProgram {
+                name: "governance".to_string(),
+                path: PathBuf::from("programs/governance"),
+                manifest_path: PathBuf::from("programs/governance/Cargo.toml"),
+            },
+        ];
+
+        let result = GenerationResult::new(programs);
+
+        // Test Debug - should show count and details
+        let debug_output = format!("{:?}", result);
+        assert!(debug_output.contains("GenerationResult"));
+        assert!(debug_output.contains("program_count: 2"));
+
+        // Test Display - should be user-friendly summary
+        let display_output = format!("{}", result);
+        assert!(display_output.contains("Generated lib.rs with 2 Solana programs:"));
+        assert!(display_output.contains("- token-manager (programs/token-manager)"));
+        assert!(display_output.contains("- governance (programs/governance)"));
+
+        // Test empty case
+        let empty_result = GenerationResult::new(vec![]);
+        let empty_display = format!("{}", empty_result);
+        assert_eq!(empty_display, "Generated lib.rs (no Solana programs found)");
     }
 }

@@ -1,70 +1,123 @@
-use crate::domain::{BuiltProgram, ElfMagicError, SolanaProgram};
+use crate::domain::{ElfMagicError, SolanaProgram};
+use std::fs;
 use std::path::PathBuf;
+use std::process::{Command, Stdio};
+
+/// Build multiple Solana programs
+///
+/// Returns the paths to the generated .so files in the same order as input programs.
+pub fn build_programs(
+    cargo_target_dir: &PathBuf,
+    programs: &[SolanaProgram],
+) -> Result<Vec<PathBuf>, ElfMagicError> {
+    programs
+        .iter()
+        .map(|program| build_program(cargo_target_dir, program))
+        .collect()
+}
 
 /// Build a single Solana program using cargo build-sbf
 ///
 /// Executes cargo build-sbf on the provided program and returns
-/// the path to the generated .so file along with metadata.
-pub fn build_single_program(program: &SolanaProgram) -> Result<BuiltProgram, ElfMagicError> {
-    // TODO: Determine target directory (honor CARGO_TARGET_DIR or use temp)
-    // TODO: Run cargo build-sbf with correct arguments
-    // TODO: Find the generated .so file
-    // TODO: Generate environment variable name from program name
-    // TODO: Return BuiltProgram with all paths and metadata
-    todo!("implement build_single_program")
-}
+/// the path to the generated .so file.
+pub fn build_program(
+    cargo_target_dir: &PathBuf,
+    program: &SolanaProgram,
+) -> Result<PathBuf, ElfMagicError> {
+    // Create elf-magic subdirectory for our Solana program builds
+    let sbf_out_dir = cargo_target_dir.join("elf-magic-bin");
 
-/// Build multiple Solana programs in parallel
-///
-/// This could be optimized to build programs in parallel since
-/// cargo build-sbf operations are independent.
-pub fn build_programs_parallel(
-    programs: &[SolanaProgram],
-) -> Result<Vec<BuiltProgram>, ElfMagicError> {
-    // TODO: Consider parallel execution with rayon
-    // TODO: For now, sequential is fine
-    programs.iter().map(build_single_program).collect()
-}
+    // Expected output path for the .so file
+    let program_so_path = sbf_out_dir.join(format!("{}.so", program.name));
 
-/// Generate environment variable name from program name
-///
-/// Converts "token-manager" to "PROGRAM_TOKEN_MANAGER_ELF_MAGIC_PATH"
-pub fn program_env_var_name(program_name: &str) -> String {
-    // TODO: Convert kebab-case to SCREAMING_SNAKE_CASE
-    // TODO: Add PROGRAM_ prefix and _ELF_MAGIC_PATH suffix
-    todo!("implement program_env_var_name")
-}
+    // Remove existing .so file to ensure clean build
+    if program_so_path.exists() {
+        fs::remove_file(&program_so_path).map_err(|e| ElfMagicError::ProgramBuild {
+            program: program.name.clone(),
+            error: format!("Failed to remove existing .so file: {}", e),
+        })?;
+    }
 
-/// Generate constant name from program name
-///
-/// Converts "token-manager" to "TOKEN_MANAGER_ELF"
-pub fn program_constant_name(program_name: &str) -> String {
-    // TODO: Convert kebab-case to SCREAMING_SNAKE_CASE
-    // TODO: Add _ELF suffix
-    todo!("implement program_constant_name")
+    // Execute cargo build-sbf
+    let status = Command::new("cargo")
+        .args([
+            "build-sbf",
+            "--manifest-path",
+            &program.manifest_path.to_string_lossy(),
+            "--sbf-out-dir",
+            &sbf_out_dir.to_string_lossy(),
+        ])
+        .env(
+            "CARGO_TARGET_DIR", // note cargo-build-sbf doesn't honor CARGO_TARGET_DIR well, but we should set it anyway
+            cargo_target_dir.to_string_lossy().into_owned(),
+        )
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
+        .map_err(|e| ElfMagicError::ProgramBuild {
+            program: program.name.clone(),
+            error: format!(
+                "Failed to execute cargo build-sbf: {}\nMake sure solana CLI tools are installed",
+                e
+            ),
+        })?;
+
+    if !status.success() {
+        return Err(ElfMagicError::ProgramBuild {
+            program: program.name.clone(),
+            error: format!("cargo build-sbf failed with exit code: {:?}", status.code()),
+        });
+    }
+
+    // Verify the .so file was created
+    if !program_so_path.exists() {
+        return Err(ElfMagicError::ProgramBuild {
+            program: program.name.clone(),
+            error: format!(
+                "Expected .so file not found at: {}",
+                program_so_path.display()
+            ),
+        });
+    }
+
+    // Set environment variable for this program
+    println!(
+        "cargo:rustc-env={}={}",
+        program.env_var_name(),
+        program_so_path.display()
+    );
+
+    Ok(program_so_path)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_program_env_var_name() {
-        // TODO: Test name conversion
-        // assert_eq!(program_env_var_name("token-manager"), "PROGRAM_TOKEN_MANAGER_ELF_MAGIC_PATH");
-        todo!("implement test")
-    }
-
-    #[test]
-    fn test_program_constant_name() {
-        // TODO: Test name conversion
-        // assert_eq!(program_constant_name("token-manager"), "TOKEN_MANAGER_ELF");
-        todo!("implement test")
-    }
+    use std::path::PathBuf;
 
     #[test]
     fn test_build_single_program() {
-        // TODO: Test with mock program
-        todo!("implement test")
+        let program = SolanaProgram {
+            name: "test-program".to_string(),
+            path: PathBuf::from("test/path"),
+            manifest_path: PathBuf::from("test/path/Cargo.toml"),
+        };
+
+        // This will fail because we don't have real Solana programs set up,
+        // but it tests that the function structure works
+        let result = build_program(&PathBuf::from(""), &program);
+
+        // Should fail with a program build error (since cargo build-sbf won't be found
+        // or the manifest doesn't exist)
+        assert!(result.is_err());
+
+        if let Err(ElfMagicError::ProgramBuild {
+            program: prog_name, ..
+        }) = result
+        {
+            assert_eq!(prog_name, "test-program");
+        } else {
+            panic!("Expected ProgramBuild error");
+        }
     }
 }

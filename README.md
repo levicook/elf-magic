@@ -8,6 +8,7 @@ Stop wrestling with Solana program builds. `elf-magic` automatically discovers a
 
 ## Quick Start
 
+<!--  FUTURE GOAL:
 **Option 1: Start Fresh**
 
 ```bash
@@ -27,6 +28,22 @@ cargo new my-elves --lib
 # Add to my-elves/Cargo.toml
 [build-dependencies]
 elf-magic = "0.1"
+
+# Add to my-project-elves/build.rs
+fn main() { elf_magic::generate(); }
+
+cargo build  # magic ✨
+``` -->
+
+**Add to Existing Workspace**
+
+```bash
+# Create an ELF crate in your workspace
+cargo new my-elves --lib
+
+# Add to my-elves/Cargo.toml
+[build-dependencies]
+elf-magic = { git = "https://github.com/levicook/elf-magic.git" }
 
 # Add to my-project-elves/build.rs
 fn main() { elf_magic::generate(); }
