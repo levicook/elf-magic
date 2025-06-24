@@ -2,7 +2,7 @@
 
 > It just works, don't ask how.
 
-Actually, fine - here's how it works: You get a build.rs one-linger that generates compile-time ELF exports for every Solana program in your workspace.
+Actually, fine - here's how it works: You get a build.rs one-liner that generates compile-time ELF exports for every Solana program in your workspace.
 
 Stop wrestling with Solana program builds. `elf-magic` automatically discovers all your programs, builds them, and generates clean Rust code so your ELF bytes are always available as constants.
 
@@ -12,48 +12,50 @@ Stop wrestling with Solana program builds. `elf-magic` automatically discovers a
 
 ```bash
 cargo install cargo-generate
-cargo generate levicook/elf-magic my-awesome-project
-cd my-awesome-project
-cargo build  # Everything just works ✨
+cd my-workspace/
+cargo generate levicook/elf-magic my-elves
+cd my-elves
+cargo build  # magic ✨
 ```
 
 **Option 2: Add to Existing Workspace**
 
 ```bash
 # Create an ELF crate in your workspace
-cargo new my-project-elves --lib
+cargo new my-elves --lib
 
-# Add to my-project-elves/Cargo.toml
-[dependencies]
+# Add to my-elves/Cargo.toml
+[build-dependencies]
 elf-magic = "0.1"
 
 # Add to my-project-elves/build.rs
 fn main() { elf_magic::generate(); }
 
-# Build and profit
-cargo build
+cargo build  # magic ✨
 ```
 
 ## What You Get
 
-After building, your ELF crate automatically exports constants for every Solana program:
+After building, your ELF crate exports generated constants for every Solana program in your workspace:
 
 **On your first build**, you'll see:
 
 ```bash
 $ cargo build
-   Compiling example-program v0.1.0
-   [... cargo build-sbf output ...]
-   Compiling my-awesome-project-elves v0.1.0
+   Compiling token-manager v0.1.0
+   [... normal cargo build-sbf output ...]
+   Compiling governance v0.1.0
+   [... normal cargo build-sbf output ...]
+   Compiling my-elves v0.1.0
    Finished dev [unoptimized + debuginfo] target(s)
 ```
 
 ```rust
 // Generated in src/lib.rs - never edit this file!
-pub const TOKEN_MANAGER_ELF: &[u8] = include_bytes!(env!("PROGRAM_TOKEN_MANAGER_SO_PATH"));
-pub const GOVERNANCE_ELF: &[u8] = include_bytes!(env!("PROGRAM_GOVERNANCE_SO_PATH"));
+pub const TOKEN_MANAGER_ELF: &[u8] = include_bytes!(env!("TOKEN_MANAGER_ELF_MAGIC_PATH"));
+pub const GOVERNANCE_ELF: &[u8] = include_bytes!(env!("GOVERNANCE_ELF_MAGIC_PATH"));
 
-pub fn all_programs() -> Vec<(&'static str, &'static [u8])> {
+pub fn elves() -> Vec<(&'static str, &'static [u8])> {
     vec![
         ("token_manager", TOKEN_MANAGER_ELF),
         ("governance", GOVERNANCE_ELF),
@@ -64,7 +66,7 @@ pub fn all_programs() -> Vec<(&'static str, &'static [u8])> {
 Use your programs anywhere:
 
 ```rust
-use my_project_elves::{TOKEN_MANAGER_ELF, GOVERNANCE_ELF};
+use my_elves::{TOKEN_MANAGER_ELF, GOVERNANCE_ELF};
 
 // Deploy, test, embed - whatever you need
 let program_id = deploy_program(TOKEN_MANAGER_ELF)?;
@@ -87,44 +89,23 @@ Behind the scenes:
 - 🔨 **Automatic building**: `cargo build-sbf` runs when source changes
 - 📝 **Code generation**: Program names become `PROGRAM_NAME_ELF` constants
 - ⚡ **Incremental**: Only rebuilds what changed
-- 🧙‍♂️ **Zero config**: Works with any workspace layout
+- 🧙‍♂️ **Config Optional**: Works with any workspace layout
 
 ## Workspace Structure
 
 Works with any layout, but here's what the template gives you:
 
 ```
-my-awesome-project/
-├── Cargo.toml                    # Workspace root
-├── my-awesome-project-elves/     # Generated ELF exports
-│   ├── build.rs                  # One-liner magic ✨
-│   └── src/lib.rs               # Auto-generated, don't edit
+my-workspace/
+├── Cargo.toml            # Workspace root
+├── my-elves/             # Generated ELF exports
+│   ├── build.rs          # One-liner magic ✨
+│   └── src/lib.rs        # Auto-generated, don't edit
 └── programs/
-    ├── token-manager/           # Your Solana programs
+    ├── token-manager/    # Your Solana programs
     ├── governance/
     └── whatever-else/
 ```
-
-## Why elf-magic?
-
-**Before:**
-
-- Run `cargo build-sbf` manually for each program
-- Hard-code filesystem paths to .so files in your code
-- Get runtime panics when files aren't where you expect
-- Context-switch between `cargo` and Solana-specific tooling
-- Remember which programs need rebuilding and when
-- Hunt down missing program files across environments
-
-**After:**
-
-```bash
-cargo build  # Just standard Cargo, always
-```
-
-Your ELF bytes are always available as clean, typed constants. No more bespoke build commands. No more tracking file paths. Just `cargo build` and everything works.
-
-The magic happens behind the scenes - `elf-magic` runs `cargo build-sbf` when needed, but you never have to think about it.
 
 ## Advanced Usage
 
@@ -155,6 +136,75 @@ exclude = ["programs/experimental-*"]
 ```
 
 Without any config, `elf-magic` discovers and builds everything - perfect for getting started. Add config only when you need it.
+
+## Why elf-magic? The tl;dr
+
+**Before:**
+
+- Run `cargo build-sbf` manually for each program
+- Hard-code filesystem paths to .so files in your code
+- Get runtime panics when files aren't where you expect
+- Context-switch between `cargo` and Solana-specific tooling
+- Remember which programs need rebuilding and when
+- Hunt down missing program files across environments
+
+**After:**
+
+```bash
+cargo build  # Just standard Cargo, always
+```
+
+Your ELF bytes are always available as clean, typed constants. No more bespoke build commands. No more tracking file paths. Just `cargo build` and everything works.
+
+The magic happens behind the scenes - `elf-magic` runs `cargo build-sbf` when needed, but you never have to think about it.
+
+## Why elf-magic? The manifesto
+
+### The Real Problem: Missing Engineering Practices
+
+Solana development suffers from a **tooling gap** that makes essential software engineering practices unnecessarily difficult:
+
+**Testing is broken.** Most projects can't easily unit test their program interactions because ELF bytes aren't available at compile time. Developers resort to:
+
+- Hard-coded file paths that break in CI
+- Runtime discovery that fails unpredictably
+- Skipping integration tests entirely
+
+**Benchmarking is impossible.** You can't benchmark program deployment or interaction patterns when your toolchain can't reliably find program binaries.
+
+**Auditing is compromised.** Security reviews need to verify the exact program bytes being deployed, but most projects have fragile, bespoke build processes that obscure this.
+
+### The Developer Experience Tax
+
+Every Solana project pays this tax:
+
+- **Context switching** between `cargo` and Solana-specific commands
+- **Runtime panics** when files aren't where expected
+- **Environment-specific builds** that work locally but fail in CI
+- **Fragile deployment scripts** that break when paths change
+
+### elf-magic Fixes This
+
+**Clear Rust dependencies.** Your program binaries become compile-time constants with normal Rust visibility and dependency management.
+
+**Standard toolchain.** Just `cargo build`, `cargo test`, `cargo bench`. No special commands, no custom scripts.
+
+**Reliable CI/CD.** Deterministic builds that work the same everywhere.
+
+**Better testing.** Write unit tests that actually test your program interactions:
+
+```rust
+#[test]
+fn test_token_manager_deployment() {
+    let program_id = deploy_program(my_elves::TOKEN_MANAGER_ELF)?;
+    let mint = create_mint(&program_id)?;
+    assert!(mint.is_initialized());
+}
+```
+
+**Professional auditing.** Auditors can verify exact program bytes with confidence.
+
+elf-magic doesn't just automate builds - it enables the software engineering practices that make Solana projects reliable, testable, and maintainable.
 
 ## Requirements
 

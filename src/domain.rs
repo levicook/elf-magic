@@ -137,14 +137,14 @@ pub struct SolanaProgram {
 pub struct BuiltProgram {
     pub program: SolanaProgram,
     pub elf_path: PathBuf,
-    pub env_var_name: String, // e.g., "PROGRAM_TOKEN_MANAGER_SO_PATH"
+    pub env_var_name: String, // e.g., "PROGRAM_TOKEN_MANAGER_ELF_MAGIC_PATH"
 }
 
 /// Generated constant definition for the lib.rs file
 #[derive(Debug, Clone)]
 pub struct ConstantDefinition {
     pub name: String,    // e.g., "TOKEN_MANAGER_ELF"
-    pub env_var: String, // e.g., "PROGRAM_TOKEN_MANAGER_SO_PATH"
+    pub env_var: String, // e.g., "PROGRAM_TOKEN_MANAGER_ELF_MAGIC_PATH"
 }
 
 /// Generated code structure

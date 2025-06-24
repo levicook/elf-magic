@@ -28,10 +28,10 @@ pub fn build_programs_parallel(
 
 /// Generate environment variable name from program name
 ///
-/// Converts "token-manager" to "PROGRAM_TOKEN_MANAGER_SO_PATH"
+/// Converts "token-manager" to "PROGRAM_TOKEN_MANAGER_ELF_MAGIC_PATH"
 pub fn program_env_var_name(program_name: &str) -> String {
     // TODO: Convert kebab-case to SCREAMING_SNAKE_CASE
-    // TODO: Add PROGRAM_ prefix and _SO_PATH suffix
+    // TODO: Add PROGRAM_ prefix and _ELF_MAGIC_PATH suffix
     todo!("implement program_env_var_name")
 }
 
@@ -51,7 +51,7 @@ mod tests {
     #[test]
     fn test_program_env_var_name() {
         // TODO: Test name conversion
-        // assert_eq!(program_env_var_name("token-manager"), "PROGRAM_TOKEN_MANAGER_SO_PATH");
+        // assert_eq!(program_env_var_name("token-manager"), "PROGRAM_TOKEN_MANAGER_ELF_MAGIC_PATH");
         todo!("implement test")
     }
 

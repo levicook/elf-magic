@@ -32,7 +32,7 @@ pub fn generate_file_header() -> String {
 
 /// Generate a constant definition line
 ///
-/// Produces: `pub const TOKEN_MANAGER_ELF: &[u8] = include_bytes!(env!("PROGRAM_TOKEN_MANAGER_SO_PATH"));`
+/// Produces: `pub const TOKEN_MANAGER_ELF: &[u8] = include_bytes!(env!("PROGRAM_TOKEN_MANAGER_ELF_MAGIC_PATH"));`
 pub fn generate_constant_definition(constant: &ConstantDefinition) -> String {
     // TODO: Generate the include_bytes! line with proper formatting
     todo!("implement generate_constant_definition")
