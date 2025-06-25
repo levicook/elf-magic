@@ -8,15 +8,7 @@ repository = "https://github.com/levicook/elf-magic"
 homepage = "https://github.com/levicook/elf-magic"
 documentation = "https://github.com/levicook/elf-magic"
 readme = "README.md"
-keywords = [
-    "rust",
-    "automation",
-    "workspace",
-    "cargo",
-    "elf",
-    "build-tools",
-    "solana",
-]
+keywords = ["workspace-automation", "cargo", "elf", "build-tool", "solana"]
 authors = ["Levi Cook <levicook@gmail.com>"]
 license-file = "LICENSE"
 
