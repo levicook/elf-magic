@@ -47,7 +47,7 @@ cargo new my-elves --lib
 
 # Add to my-elves/Cargo.toml
 [build-dependencies]
-elf-magic = { git = "https://github.com/levicook/elf-magic.git" }
+elf-magic = "0.2"
 
 # Add to my-project-elves/build.rs
 fn main() { elf_magic::generate().unwrap(); }
