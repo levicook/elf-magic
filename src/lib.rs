@@ -26,8 +26,8 @@ pub fn generate() -> Result<GenerationResult, Error> {
     // 1. load config
     // 2. load workspaces
     // 3. discover programs across all workspaces
-    // 4. build included programs across all workspaces
-    // 5. generate code - one lib.rs from all included programs
+    // 4. build included programs across all workspaces (collect successes and failures)
+    // 5. generate code - one lib.rs from successfully built programs, with build status
     // 6. enable incremental builds for all included programs
 
     let config = Config::load(&cargo_manifest_dir)?;
@@ -48,11 +48,13 @@ pub fn generate() -> Result<GenerationResult, Error> {
     // Deduplicate programs by manifest_path to avoid duplicate constants
     let included_programs = deduplicate_programs(included_programs);
 
-    builder::build_programs(&included_programs)?;
+    let build_result = builder::build_programs(&included_programs);
 
-    let code = codegen::generate(&included_programs)?;
+    // Generate code from successfully built programs, including build status
+    let code = codegen::generate(&build_result)?;
     codegen::save(&cargo_manifest_dir, &code)?;
 
+    // Enable incremental builds for all programs (successful and failed)
     enable_incremental_builds(&included_programs)?;
 
     let mode = match &config {

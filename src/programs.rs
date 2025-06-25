@@ -1,12 +1,38 @@
 use std::fmt;
 use std::path::PathBuf;
 
+use crate::error::Error;
+
 /// A confirmed Solana program (has crate-type = ["cdylib"])
 #[derive(Clone)]
 pub struct SolanaProgram {
     pub manifest_path: PathBuf,
     pub package_name: String,
     pub target_name: String,
+}
+
+/// Result of building multiple Solana programs
+#[derive(Debug)]
+pub struct BuildResult {
+    pub successful: Vec<(SolanaProgram, PathBuf)>,
+    pub failed: Vec<(SolanaProgram, Error)>,
+}
+
+impl BuildResult {
+    pub fn new() -> Self {
+        Self {
+            successful: Vec::new(),
+            failed: Vec::new(),
+        }
+    }
+
+    pub fn add_success(&mut self, program: SolanaProgram, path: PathBuf) {
+        self.successful.push((program, path));
+    }
+
+    pub fn add_failure(&mut self, program: SolanaProgram, error: Error) {
+        self.failed.push((program, error));
+    }
 }
 
 impl SolanaProgram {

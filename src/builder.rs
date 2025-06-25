@@ -2,13 +2,30 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use crate::{error::Error, programs::SolanaProgram};
+use crate::{
+    error::Error,
+    programs::{BuildResult, SolanaProgram},
+};
 
-/// Build multiple Solana programs
+/// Build multiple Solana programs, collecting both successes and failures
 ///
-/// Returns the paths to the generated .so files in the same order as input programs.
-pub fn build_programs(programs: &[SolanaProgram]) -> Result<Vec<PathBuf>, Error> {
-    programs.iter().map(build_program).collect()
+/// Returns build results containing successfully built programs and any failures.
+/// This allows partial success - some programs can build while others fail.
+pub fn build_programs(programs: &[SolanaProgram]) -> BuildResult {
+    let mut result = BuildResult::new();
+
+    for program in programs {
+        match build_program(program) {
+            Ok(path) => {
+                result.add_success(program.clone(), path);
+            }
+            Err(error) => {
+                result.add_failure(program.clone(), error);
+            }
+        }
+    }
+
+    result
 }
 
 /// Build a single Solana program using cargo build-sbf
@@ -98,8 +115,8 @@ mod tests {
         let result = build_programs(&[]);
 
         // Should succeed with empty programs list
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap().len(), 0);
+        assert_eq!(result.successful.len(), 0);
+        assert_eq!(result.failed.len(), 0);
     }
 
     #[test]
@@ -149,18 +166,11 @@ mod tests {
         // signature and that it attempts to process all programs
         let result = build_programs(&programs);
 
-        // This will likely fail because cargo build-sbf won't work, but we're testing
+        // This will likely have failures because cargo build-sbf won't work, but we're testing
         // that it processes the correct number of programs
-        match result {
-            Ok(paths) => {
-                // If it somehow succeeds, verify order
-                assert_eq!(paths.len(), 2);
-            }
-            Err(_) => {
-                // Expected in test environment without Solana tools
-                // The important thing is that it tried to process both programs
-            }
-        }
+        assert_eq!(result.successful.len() + result.failed.len(), 2);
+        // In test environment without Solana tools, we expect failures
+        // The important thing is that it tried to process both programs
     }
 
     #[test]
