@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use crate::{error::Error, programs::SolanaProgram};
@@ -7,13 +7,10 @@ use crate::{error::Error, programs::SolanaProgram};
 /// Build multiple Solana programs
 ///
 /// Returns the paths to the generated .so files in the same order as input programs.
-pub fn build_programs(
-    cargo_target_dir: &Path,
-    programs: &[SolanaProgram],
-) -> Result<Vec<PathBuf>, Error> {
+pub fn build_programs(programs: &[SolanaProgram]) -> Result<Vec<PathBuf>, Error> {
     programs
         .iter()
-        .map(|program| build_program(cargo_target_dir, program))
+        .map(|program| build_program(program))
         .collect()
 }
 
@@ -21,9 +18,11 @@ pub fn build_programs(
 ///
 /// Executes cargo build-sbf on the provided program and returns
 /// the path to the generated .so file.
-pub fn build_program(cargo_target_dir: &Path, program: &SolanaProgram) -> Result<PathBuf, Error> {
+pub fn build_program(program: &SolanaProgram) -> Result<PathBuf, Error> {
     // Create elf-magic subdirectory for our Solana program builds
-    let sbf_out_dir = cargo_target_dir.join("elf-magic-bin");
+    let sbf_out_dir = std::env::temp_dir()
+        .join("elf-magic-bin")
+        .join(program.package_name.clone());
 
     // Expected output path for the .so file
     let program_so_path = sbf_out_dir.join(format!("{}.so", program.target_name));
@@ -45,10 +44,6 @@ pub fn build_program(cargo_target_dir: &Path, program: &SolanaProgram) -> Result
             "--sbf-out-dir",
             &sbf_out_dir.to_string_lossy(),
         ])
-        .env(
-            "CARGO_TARGET_DIR", // note cargo-build-sbf doesn't honor CARGO_TARGET_DIR well, but we should set it anyway
-            cargo_target_dir.to_string_lossy().into_owned(),
-        )
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .status()
@@ -103,8 +98,7 @@ mod tests {
 
     #[test]
     fn test_build_programs_empty() {
-        let temp_dir = TempDir::new().unwrap();
-        let result = build_programs(temp_dir.path(), &[]);
+        let result = build_programs(&[]);
 
         // Should succeed with empty programs list
         assert!(result.is_ok());
@@ -141,7 +135,6 @@ mod tests {
 
     #[test]
     fn test_build_programs_preserves_order() {
-        let temp_dir = TempDir::new().unwrap();
         let programs = vec![
             SolanaProgram {
                 package_name: "pkg1".to_string(),
@@ -157,7 +150,7 @@ mod tests {
 
         // We can't actually run cargo build-sbf in tests, but we can verify the function
         // signature and that it attempts to process all programs
-        let result = build_programs(temp_dir.path(), &programs);
+        let result = build_programs(&programs);
 
         // This will likely fail because cargo build-sbf won't work, but we're testing
         // that it processes the correct number of programs

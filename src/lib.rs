@@ -22,10 +22,6 @@ pub fn generate() -> Result<GenerationResult, Error> {
             Error::WorkspaceDiscovery(message)
         })?;
 
-    let cargo_target_dir = env::var("CARGO_TARGET_DIR")
-        .map(PathBuf::from) // important default, DO NOT CHANGE:
-        .unwrap_or_else(|_| env::temp_dir().join("elf-magic-target"));
-
     // Core pipeline:
     // 1. load config
     // 2. load workspaces
@@ -49,7 +45,7 @@ pub fn generate() -> Result<GenerationResult, Error> {
         .flat_map(|w| w.included.iter().cloned())
         .collect();
 
-    builder::build_programs(&cargo_target_dir, &included_programs)?;
+    builder::build_programs(&included_programs)?;
 
     let code = codegen::generate(&included_programs)?;
     codegen::save(&cargo_manifest_dir, &code)?;
