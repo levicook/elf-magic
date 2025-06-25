@@ -8,10 +8,7 @@ use crate::{error::Error, programs::SolanaProgram};
 ///
 /// Returns the paths to the generated .so files in the same order as input programs.
 pub fn build_programs(programs: &[SolanaProgram]) -> Result<Vec<PathBuf>, Error> {
-    programs
-        .iter()
-        .map(|program| build_program(program))
-        .collect()
+    programs.iter().map(build_program).collect()
 }
 
 /// Build a single Solana program using cargo build-sbf
