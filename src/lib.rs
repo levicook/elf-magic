@@ -6,6 +6,8 @@ pub mod io;
 use domain::{ElfMagicError, GenerationResult};
 use std::{env, path::PathBuf};
 
+use crate::domain::ProgramFilter;
+
 /// Main entry point for elf-magic code generation
 ///
 /// This function orchestrates the entire process:
@@ -26,11 +28,11 @@ pub fn generate() -> Result<GenerationResult, ElfMagicError> {
         .map(PathBuf::from)
         .unwrap_or_else(|_| env::temp_dir().join("elf-magic-target"));
 
+    let workspace = io::discover_workspace(&cargo_manifest_dir)?;
+
     let manifest_config = io::parse_manifest_config(&cargo_manifest_dir)?;
-
-    let workspace = io::discover_workspace(&cargo_manifest_dir, &manifest_config)?;
-
-    let programs = workspace.find_solana_programs();
+    let filter = ProgramFilter::from(&manifest_config);
+    let programs = workspace.find_solana_programs(&filter);
 
     builder::build_programs(&cargo_target_dir, &programs)?;
 

@@ -1,27 +1,19 @@
-use crate::codegen;
-use crate::domain::{ElfMagicError, ManifestConfig, SolanaProgram, Workspace, WorkspaceMember};
 use serde::Deserialize;
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::Path;
+use std::process::{Command, Stdio};
+use tempfile::NamedTempFile;
+
+use crate::{
+    codegen,
+    domain::{ElfMagicError, ManifestConfig, Package, SolanaProgram, Workspace},
+};
 
 /// Represents the structure of cargo metadata JSON output
 #[derive(Debug, Deserialize)]
 struct CargoMetadata {
-    workspace_root: PathBuf,
+    // root_path: PathBuf,
     packages: Vec<Package>,
-}
-
-#[derive(Debug, Deserialize)]
-struct Package {
-    manifest_path: PathBuf,
-    targets: Vec<Target>,
-}
-
-#[derive(Debug, Deserialize)]
-struct Target {
-    name: String,
-    crate_types: Vec<String>,
 }
 
 /// Represents the structure of a Cargo.toml file for parsing metadata
@@ -45,9 +37,7 @@ struct Metadata {
 ///
 /// Reads the include/exclude patterns from the Cargo.toml metadata section.
 /// If no configuration is found, returns a safe default that includes nothing.
-pub fn parse_manifest_config(
-    cargo_manifest_dir: &PathBuf,
-) -> Result<ManifestConfig, ElfMagicError> {
+pub fn parse_manifest_config(cargo_manifest_dir: &Path) -> Result<ManifestConfig, ElfMagicError> {
     let manifest_path = cargo_manifest_dir.join("Cargo.toml");
 
     // Read the Cargo.toml file
@@ -77,75 +67,34 @@ pub fn parse_manifest_config(
 ///
 /// This function finds the workspace root and all workspace members,
 /// then parses each member's Cargo.toml to extract crate types.
-pub fn discover_workspace(
-    cargo_manifest_dir: &PathBuf,
-    manifest_config: &ManifestConfig,
-) -> Result<Workspace, ElfMagicError> {
+pub fn discover_workspace(cargo_manifest_dir: &Path) -> Result<Workspace, ElfMagicError> {
     let manifest_path = cargo_manifest_dir.join("Cargo.toml");
 
-    let mut cmd = Command::new("cargo");
-    cmd.args(&[
-        "metadata",
-        "--format-version",
-        "1",
-        "--no-deps",
-        "--manifest-path",
-        manifest_path.to_str().unwrap(),
-    ]);
-
-    let output = cmd.output().map_err(|e| {
-        ElfMagicError::WorkspaceDiscovery(format!("Failed to execute cargo metadata: {}", e))
-    })?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(ElfMagicError::WorkspaceDiscovery(format!(
-            "cargo metadata failed: {}",
-            stderr
-        )));
-    }
+    let output = Command::new("cargo")
+        .args([
+            "metadata",
+            "--format-version",
+            "1",
+            "--no-deps",
+            "--manifest-path",
+            manifest_path.to_str().unwrap(),
+        ])
+        .stderr(Stdio::inherit())
+        .output()
+        .map_err(|e| {
+            ElfMagicError::WorkspaceDiscovery(format!("Failed to execute cargo metadata: {}", e))
+        })?;
 
     // Parse the JSON output
-    let metadata: CargoMetadata = serde_json::from_slice(&output.stdout).map_err(|e| {
+    let mut metadata: CargoMetadata = serde_json::from_slice(&output.stdout).map_err(|e| {
         ElfMagicError::WorkspaceDiscovery(format!("Failed to parse cargo metadata JSON: {}", e))
     })?;
 
-    // Process each package into WorkspaceMembers
-    let mut members: Vec<WorkspaceMember> = Vec::new();
-
-    for package in metadata.packages {
-        // Find targets with cdylib crate type (Solana programs)
-        for target in package.targets {
-            if target.crate_types.contains(&"cdylib".to_string()) {
-                let package_dir = package
-                    .manifest_path
-                    .parent()
-                    .ok_or_else(|| {
-                        ElfMagicError::WorkspaceDiscovery(format!(
-                            "Invalid manifest path: {}",
-                            package.manifest_path.display()
-                        ))
-                    })?
-                    .to_path_buf();
-
-                let member = WorkspaceMember {
-                    name: target.name, // Use library name, not package name
-                    path: package_dir,
-                    manifest_path: package.manifest_path.clone(),
-                    crate_types: target.crate_types, // Use from metadata, not parsed TOML
-                };
-                members.push(member);
-            }
-        }
-    }
-
     // Sort members by name for stable, predictable output
-    members.sort_by(|a, b| a.name.cmp(&b.name));
+    metadata.packages.sort_by(|a, b| a.name.cmp(&b.name));
 
     Ok(Workspace {
-        root_path: metadata.workspace_root,
-        members,
-        config: manifest_config.clone(),
+        packages: metadata.packages,
     })
 }
 
@@ -164,11 +113,10 @@ pub fn write_lib_file(
     let target_path = cargo_manifest_dir.join("src/lib.rs");
     let target_dir = target_path.parent().unwrap_or(cargo_manifest_dir);
 
-    let temp_file =
-        tempfile::NamedTempFile::new_in(target_dir).map_err(|e| ElfMagicError::Io(e))?;
+    let temp_file = NamedTempFile::new_in(target_dir).map_err(ElfMagicError::Io)?;
 
     // Write content to temporary file
-    fs::write(temp_file.path(), &rendered_content).map_err(|e| ElfMagicError::Io(e))?;
+    fs::write(temp_file.path(), &rendered_content).map_err(ElfMagicError::Io)?;
 
     // Run cargo fmt on the temporary file before moving
     // Get the path as a string to avoid borrow issues
@@ -221,6 +169,10 @@ pub fn setup_incremental_builds(programs: &[SolanaProgram]) -> Result<(), ElfMag
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
+    use crate::domain::ProgramFilter;
+
     use super::*;
 
     fn create_test_cargo_toml(content: &str) -> tempfile::TempDir {
@@ -253,6 +205,7 @@ edition = "2021"
 
 [lib]
 crate-type = ["cdylib"]
+name = "program_a"
 "#;
         std::fs::write(program_a_dir.join("Cargo.toml"), program_a_cargo_toml)
             .expect("Failed to write program-a Cargo.toml");
@@ -310,7 +263,7 @@ exclude = ["programs/deprecated-*", "contracts/old-*"]
 "#;
 
         let temp_dir = create_test_cargo_toml(cargo_toml_content);
-        let result = parse_manifest_config(&temp_dir.path().into()).unwrap();
+        let result = parse_manifest_config(temp_dir.path()).unwrap();
 
         assert_eq!(result.include, vec!["programs/*", "contracts/*"]);
         assert_eq!(
@@ -332,7 +285,7 @@ include = ["programs/*"]
 "#;
 
         let temp_dir = create_test_cargo_toml(cargo_toml_content);
-        let result = parse_manifest_config(&temp_dir.path().into()).unwrap();
+        let result = parse_manifest_config(temp_dir.path()).unwrap();
 
         assert_eq!(result.include, vec!["programs/*"]);
         assert_eq!(result.exclude, Vec::<String>::new());
@@ -348,7 +301,7 @@ edition = "2021"
 "#;
 
         let temp_dir = create_test_cargo_toml(cargo_toml_content);
-        let result = parse_manifest_config(&temp_dir.path().into()).unwrap();
+        let result = parse_manifest_config(temp_dir.path()).unwrap();
 
         // Should return permissive default (allow_all)
         assert_eq!(result.include, vec!["**/*"]);
@@ -365,7 +318,7 @@ edition = "2021"
 "#;
 
         let temp_dir = create_test_cargo_toml(cargo_toml_content);
-        let result = parse_manifest_config(&temp_dir.path().into()).unwrap();
+        let result = parse_manifest_config(temp_dir.path()).unwrap();
 
         // Should return permissive default (allow_all)
         assert_eq!(result.include, vec!["**/*"]);
@@ -380,7 +333,7 @@ members = ["programs/*"]
 "#;
 
         let temp_dir = create_test_cargo_toml(cargo_toml_content);
-        let result = parse_manifest_config(&temp_dir.path().into()).unwrap();
+        let result = parse_manifest_config(temp_dir.path()).unwrap();
 
         // Should return permissive default (allow_all)
         assert_eq!(result.include, vec!["**/*"]);
@@ -392,7 +345,7 @@ members = ["programs/*"]
         let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
         // Don't create Cargo.toml, so it doesn't exist
 
-        let result = parse_manifest_config(&temp_dir.path().into());
+        let result = parse_manifest_config(temp_dir.path());
 
         assert!(result.is_err());
         let error_message = result.unwrap_err().to_string();
@@ -407,7 +360,7 @@ name = "test-package"  # Missing closing bracket
 "#;
 
         let temp_dir = create_test_cargo_toml(invalid_cargo_toml_content);
-        let result = parse_manifest_config(&temp_dir.path().into());
+        let result = parse_manifest_config(temp_dir.path());
 
         assert!(result.is_err());
         let error_message = result.unwrap_err().to_string();
@@ -428,7 +381,7 @@ exclude = []
 "#;
 
         let temp_dir = create_test_cargo_toml(cargo_toml_content);
-        let result = parse_manifest_config(&temp_dir.path().into()).unwrap();
+        let result = parse_manifest_config(temp_dir.path()).unwrap();
 
         assert_eq!(result.include, Vec::<String>::new());
         assert_eq!(result.exclude, Vec::<String>::new());
@@ -438,68 +391,82 @@ exclude = []
     fn test_discover_workspace_integration() {
         let temp_workspace = create_test_workspace();
 
-        let config = ManifestConfig {
-            include: vec!["**/*".to_string()],
-            exclude: vec![],
-        };
-
-        let result = discover_workspace(&temp_workspace.path().to_path_buf(), &config);
+        let result = discover_workspace(temp_workspace.path());
 
         // Verify the workspace discovery worked
         let workspace = result.expect("Should successfully discover test workspace");
 
         // Check basic workspace properties (canonicalize paths to handle symlinks on macOS)
         assert_eq!(
-            workspace.root_path.canonicalize().unwrap(),
-            temp_workspace.path().canonicalize().unwrap()
+            workspace
+                .packages
+                .iter()
+                .map(|p| p.manifest_path.parent().unwrap().canonicalize().unwrap())
+                .collect::<Vec<_>>(),
+            vec![
+                temp_workspace
+                    .path()
+                    .canonicalize()
+                    .unwrap()
+                    .join("lib-crate"),
+                temp_workspace
+                    .path()
+                    .canonicalize()
+                    .unwrap()
+                    .join("program-a"),
+                temp_workspace
+                    .path()
+                    .canonicalize()
+                    .unwrap()
+                    .join("program-b"),
+            ]
         );
-        assert_eq!(workspace.config.include, vec!["**/*"]);
-        assert_eq!(workspace.config.exclude, Vec::<String>::new());
 
-        // Should find only 2 members (cdylib programs only)
-        assert_eq!(workspace.members.len(), 2);
+        // Should find all 3 packages
+        assert_eq!(workspace.packages.len(), 3);
 
         // Members should be sorted by name
-        let member_names: Vec<&String> = workspace.members.iter().map(|m| &m.name).collect();
-        assert_eq!(member_names, vec!["program_a", "program_b"]);
+        let package_names: Vec<&String> = workspace.packages.iter().map(|m| &m.name).collect();
+        assert_eq!(package_names, vec!["lib-crate", "program-a", "program-b"]);
 
-        // Verify crate types are correctly extracted (should all be cdylib)
-        for member in &workspace.members {
-            assert_eq!(member.crate_types, vec!["cdylib"]);
+        // Verify crate types are correctly extracted
+        for package in &workspace.packages {
+            match package.name.as_str() {
+                "lib-crate" => {
+                    assert_eq!(
+                        package
+                            .targets
+                            .iter()
+                            .map(|t| t.crate_types.clone())
+                            .collect::<Vec<_>>(),
+                        vec![vec!["lib"]]
+                    );
+                }
+                "program-a" => {
+                    assert_eq!(
+                        package
+                            .targets
+                            .iter()
+                            .map(|t| t.crate_types.clone())
+                            .collect::<Vec<_>>(),
+                        vec![vec!["cdylib"]]
+                    );
+                }
+                "program-b" => {
+                    assert_eq!(
+                        package
+                            .targets
+                            .iter()
+                            .map(|t| t.crate_types.clone())
+                            .collect::<Vec<_>>(),
+                        vec![vec!["cdylib"]]
+                    );
+                }
+                _ => {
+                    panic!("Unexpected package name: {}", package.name);
+                }
+            }
         }
-
-        let program_a = workspace
-            .members
-            .iter()
-            .find(|m| m.name == "program_a")
-            .unwrap();
-
-        let program_b = workspace
-            .members
-            .iter()
-            .find(|m| m.name == "program_b")
-            .unwrap();
-
-        // Verify paths are correct (canonicalize to handle symlinks)
-        let workspace_root = temp_workspace.path().canonicalize().unwrap();
-        assert_eq!(
-            program_a.path.canonicalize().unwrap(),
-            workspace_root.join("program-a")
-        );
-        assert_eq!(
-            program_b.path.canonicalize().unwrap(),
-            workspace_root.join("program-b")
-        );
-
-        // Verify manifest paths are correct
-        assert_eq!(
-            program_a.manifest_path.canonicalize().unwrap(),
-            workspace_root.join("program-a/Cargo.toml")
-        );
-        assert_eq!(
-            program_b.manifest_path.canonicalize().unwrap(),
-            workspace_root.join("program-b/Cargo.toml")
-        );
     }
 
     #[test]
@@ -512,12 +479,13 @@ exclude = []
             exclude: vec!["program-a".to_string()],
         };
 
-        let result = discover_workspace(&temp_workspace.path().to_path_buf(), &config);
+        let result = discover_workspace(temp_workspace.path());
 
         let workspace = result.expect("Should successfully discover test workspace");
 
         // Find Solana programs using the workspace's filtering logic
-        let solana_programs = workspace.find_solana_programs();
+        let filter = ProgramFilter::from(&config);
+        let solana_programs = workspace.find_solana_programs(&filter);
 
         // Should find only program-b (program-a excluded, lib-crate not a Solana program)
         assert_eq!(solana_programs.len(), 1);
@@ -529,12 +497,13 @@ exclude = []
         let temp_workspace = create_test_workspace();
 
         let config = ManifestConfig::allow_all();
-        let result = discover_workspace(&temp_workspace.path().to_path_buf(), &config);
+        let result = discover_workspace(temp_workspace.path());
 
         let workspace = result.expect("Should successfully discover test workspace");
 
         // Find Solana programs
-        let solana_programs = workspace.find_solana_programs();
+        let filter = ProgramFilter::from(&config);
+        let solana_programs = workspace.find_solana_programs(&filter);
 
         // Should find exactly 2 Solana programs (cdylib crates)
         assert_eq!(solana_programs.len(), 2);
@@ -560,23 +529,20 @@ exclude = []
     #[test]
     fn test_discover_workspace() {
         // This test runs against the real workspace as a sanity check
-        let config = ManifestConfig {
-            include: vec!["programs/*".to_string()],
-            exclude: vec!["programs/deprecated-*".to_string()],
-        };
-
-        // Test in current workspace (should work since we're in a valid cargo workspace)
         let current_dir = std::env::current_dir().unwrap();
-        match discover_workspace(&current_dir, &config) {
+        match discover_workspace(&current_dir) {
             Ok(workspace) => {
                 // Basic sanity checks
-                assert!(!workspace.root_path.as_os_str().is_empty());
-                assert_eq!(workspace.config.include, vec!["programs/*"]);
-                assert_eq!(workspace.config.exclude, vec!["programs/deprecated-*"]);
+                assert!(!workspace
+                    .packages
+                    .iter()
+                    .map(|p| p.manifest_path.parent().unwrap().as_os_str())
+                    .collect::<Vec<_>>()
+                    .is_empty());
 
                 // Members should be sorted by name
                 let member_names: Vec<&String> =
-                    workspace.members.iter().map(|m| &m.name).collect();
+                    workspace.packages.iter().map(|m| &m.name).collect();
                 let mut sorted_names = member_names.clone();
                 sorted_names.sort();
                 assert_eq!(member_names, sorted_names);
@@ -594,14 +560,12 @@ exclude = []
     #[test]
     fn test_discover_workspace_sorted() {
         // Test the sorting behavior specifically
-        let config = ManifestConfig::allow_all();
-
         let current_dir = std::env::current_dir().unwrap();
-        match discover_workspace(&current_dir, &config) {
+        match discover_workspace(&current_dir) {
             Ok(workspace) => {
                 // Verify members are sorted by name
-                for i in 1..workspace.members.len() {
-                    assert!(workspace.members[i - 1].name <= workspace.members[i].name);
+                for i in 1..workspace.packages.len() {
+                    assert!(workspace.packages[i - 1].name <= workspace.packages[i].name);
                 }
             }
             Err(_) => {
@@ -635,7 +599,7 @@ exclude = []
             .expect("Failed to change to temp workspace");
 
         // Test the write_lib_file function in isolation
-        let result = write_lib_file(&temp_workspace.path(), &programs);
+        let result = write_lib_file(temp_workspace.path(), &programs);
 
         // CRITICAL: Restore original directory BEFORE any assertions that might panic
         std::env::set_current_dir(original_dir).expect("Failed to restore original dir");

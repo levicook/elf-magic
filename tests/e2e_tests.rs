@@ -1,10 +1,8 @@
 #![cfg(feature = "testing")]
 
-use elf_magic;
 use std::env;
 use std::fs;
 use tempfile::TempDir;
-use toml;
 
 /// Creates a complete mock Solana workspace with real buildable programs
 fn create_e2e_workspace() -> TempDir {
@@ -187,7 +185,7 @@ elf-magic = {{ path = "{}" }}
 
     // Add elf-magic configuration if provided
     if let Some(config) = elf_magic_config {
-        elf_cargo_toml.push_str("\n");
+        elf_cargo_toml.push('\n');
         elf_cargo_toml.push_str(config);
     }
 

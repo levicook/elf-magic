@@ -117,17 +117,19 @@ impl From<&ManifestConfig> for ProgramFilter {
 /// A Cargo workspace containing potential Solana programs
 #[derive(Debug, Clone)]
 pub struct Workspace {
-    pub root_path: PathBuf,
-    pub members: Vec<WorkspaceMember>,
-    pub config: ManifestConfig,
+    pub packages: Vec<Package>,
 }
 
-/// A workspace member (crate) that might be a Solana program
-#[derive(Debug, Clone)]
-pub struct WorkspaceMember {
+#[derive(Clone, Debug, Deserialize)]
+pub struct Package {
     pub name: String,
-    pub path: PathBuf,
     pub manifest_path: PathBuf,
+    pub targets: Vec<Target>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct Target {
+    pub name: String,
     pub crate_types: Vec<String>,
 }
 
@@ -196,25 +198,25 @@ impl GenerationResult {
 
 impl Workspace {
     /// Find all Solana programs in this workspace using configured filters
-    pub fn find_solana_programs(&self) -> Vec<SolanaProgram> {
-        let filter = ProgramFilter::from(&self.config);
-        self.find_solana_programs_with_filter(&filter)
-    }
-
-    /// Find Solana programs with a specific filter
-    pub fn find_solana_programs_with_filter(&self, filter: &ProgramFilter) -> Vec<SolanaProgram> {
-        self.members
+    pub fn find_solana_programs(&self, filter: &ProgramFilter) -> Vec<SolanaProgram> {
+        self.packages
             .iter()
-            .filter(|member| {
-                // Must be a Solana program (cdylib)
-                member.crate_types.contains(&"cdylib".to_string()) &&
-                // Must pass the path filter
-                filter.should_include(&member.path)
-            })
-            .map(|member| SolanaProgram {
-                name: member.name.clone(),
-                path: member.path.clone(),
-                manifest_path: member.manifest_path.clone(),
+            .filter(|package| filter.should_include(&package.manifest_path))
+            .flat_map(|package| {
+                package
+                    .targets
+                    .iter()
+                    .filter(|target| {
+                        target
+                            .crate_types
+                            .iter()
+                            .any(|crate_type| crate_type == "cdylib")
+                    })
+                    .map(|target| SolanaProgram {
+                        name: target.name.clone(),
+                        path: package.manifest_path.parent().unwrap().to_path_buf(),
+                        manifest_path: package.manifest_path.clone(),
+                    })
             })
             .collect()
     }
@@ -239,12 +241,14 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    fn create_test_member(name: &str, path: &str, crate_types: Vec<&str>) -> WorkspaceMember {
-        WorkspaceMember {
+    fn create_test_member(name: &str, path: &str, crate_types: Vec<&str>) -> Package {
+        Package {
             name: name.to_string(),
-            path: PathBuf::from(path),
             manifest_path: PathBuf::from(format!("{}/Cargo.toml", path)),
-            crate_types: crate_types.iter().map(|s| s.to_string()).collect(),
+            targets: vec![Target {
+                name: name.to_string(),
+                crate_types: crate_types.iter().map(|s| s.to_string()).collect(),
+            }],
         }
     }
 
@@ -281,25 +285,22 @@ mod tests {
 
     #[test]
     fn test_workspace_find_solana_programs() {
-        let members = vec![
+        let config = ManifestConfig {
+            include: vec!["programs/*".to_string()],
+            exclude: vec!["programs/deprecated-*".to_string()],
+        };
+
+        let packages = vec![
             create_test_member("token-manager", "programs/token-manager", vec!["cdylib"]),
             create_test_member("governance", "programs/governance", vec!["cdylib"]),
             create_test_member("deprecated", "programs/deprecated-old", vec!["cdylib"]),
             create_test_member("test-utils", "test-utils", vec!["lib"]),
         ];
 
-        let config = ManifestConfig {
-            include: vec!["programs/*".to_string()],
-            exclude: vec!["programs/deprecated-*".to_string()],
-        };
+        let workspace = Workspace { packages };
 
-        let workspace = Workspace {
-            root_path: PathBuf::from("/workspace"),
-            members,
-            config,
-        };
-
-        let programs = workspace.find_solana_programs();
+        let filter = ProgramFilter::from(&config);
+        let programs = workspace.find_solana_programs(&filter);
 
         // Should find 2 programs (excluding deprecated and non-cdylib)
         assert_eq!(programs.len(), 2);
@@ -342,13 +343,15 @@ mod tests {
     #[test]
     fn test_solana_program_debug_display() {
         let program = SolanaProgram {
-            name: "token-manager".to_string(),
+            name: "token_manager".to_string(),
             path: PathBuf::from("programs/token-manager"),
             manifest_path: PathBuf::from("programs/token-manager/Cargo.toml"),
         };
 
         // Test Debug - should be clean and structured with computed fields
         let debug_output = format!("{:?}", program);
+        println!("debug_output: {}", debug_output);
+
         assert!(debug_output.contains("SolanaProgram"));
         assert!(debug_output.contains("token-manager"));
         assert!(debug_output.contains("programs/token-manager"));
@@ -359,7 +362,7 @@ mod tests {
 
         // Test Display - should be user-friendly
         let display_output = format!("{}", program);
-        assert_eq!(display_output, "token-manager (programs/token-manager)");
+        assert_eq!(display_output, "token_manager (programs/token-manager)");
     }
 
     #[test]

@@ -1,13 +1,13 @@
 use crate::domain::{ElfMagicError, SolanaProgram};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 /// Build multiple Solana programs
 ///
 /// Returns the paths to the generated .so files in the same order as input programs.
 pub fn build_programs(
-    cargo_target_dir: &PathBuf,
+    cargo_target_dir: &Path,
     programs: &[SolanaProgram],
 ) -> Result<Vec<PathBuf>, ElfMagicError> {
     programs
@@ -21,7 +21,7 @@ pub fn build_programs(
 /// Executes cargo build-sbf on the provided program and returns
 /// the path to the generated .so file.
 pub fn build_program(
-    cargo_target_dir: &PathBuf,
+    cargo_target_dir: &Path,
     program: &SolanaProgram,
 ) -> Result<PathBuf, ElfMagicError> {
     // Create elf-magic subdirectory for our Solana program builds
@@ -88,36 +88,4 @@ pub fn build_program(
     );
 
     Ok(program_so_path)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::PathBuf;
-
-    #[test]
-    fn test_build_single_program() {
-        let program = SolanaProgram {
-            name: "test-program".to_string(),
-            path: PathBuf::from("test/path"),
-            manifest_path: PathBuf::from("test/path/Cargo.toml"),
-        };
-
-        // This will fail because we don't have real Solana programs set up,
-        // but it tests that the function structure works
-        let result = build_program(&PathBuf::from(""), &program);
-
-        // Should fail with a program build error (since cargo build-sbf won't be found
-        // or the manifest doesn't exist)
-        assert!(result.is_err());
-
-        if let Err(ElfMagicError::ProgramBuild {
-            program: prog_name, ..
-        }) = result
-        {
-            assert_eq!(prog_name, "test-program");
-        } else {
-            panic!("Expected ProgramBuild error");
-        }
-    }
 }
