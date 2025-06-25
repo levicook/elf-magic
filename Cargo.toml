@@ -23,6 +23,7 @@ minijinja = "2.10.2"
 chrono = { version = "0.4", features = ["serde"] }
 tempfile = "3.0"
 temp-env = { version = "0.3", optional = true }
+cargo_metadata = "0.20"
 
 [features]
 testing = ["dep:temp-env"]

@@ -1,52 +1,73 @@
-pub mod builder;
-pub mod codegen;
-pub mod domain;
-pub mod io;
+mod builder;
+mod codegen;
+mod config;
+mod error;
+mod programs;
+mod workspace;
 
-use domain::{ElfMagicError, GenerationResult};
 use std::{env, path::PathBuf};
 
-use crate::domain::ProgramFilter;
+use crate::{
+    config::Config,
+    error::Error,
+    programs::{GenerationResult, SolanaProgram},
+};
 
-/// Main entry point for elf-magic code generation
-///
-/// This function orchestrates the entire process:
-/// 1. Parse manifest configuration from package.metadata.elf-magic
-/// 2. Discover workspace and find Solana programs
-/// 3. Build each program with cargo build-sbf
-/// 4. Generate clean Rust code for ELF exports
-/// 5. Write the generated lib.rs file
-/// 6. Set up incremental build dependencies
-pub fn generate() -> Result<GenerationResult, ElfMagicError> {
+/// Generate Rust bindings for Solana programs
+pub fn generate() -> Result<GenerationResult, Error> {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR")
         .map(PathBuf::from)
         .map_err(|e| {
-            ElfMagicError::WorkspaceDiscovery(format!("CARGO_MANIFEST_DIR not set: {}", e))
+            let message = format!("CARGO_MANIFEST_DIR not set: {}", e);
+            Error::WorkspaceDiscovery(message)
         })?;
 
     let cargo_target_dir = env::var("CARGO_TARGET_DIR")
-        .map(PathBuf::from)
+        .map(PathBuf::from) // important default, DO NOT CHANGE:
         .unwrap_or_else(|_| env::temp_dir().join("elf-magic-target"));
 
-    let workspace = io::discover_workspace(&cargo_manifest_dir)?;
+    // Core pipeline:
+    // 1. load config
+    // 2. load workspaces
+    // 3. discover programs across all workspaces
+    // 4. build included programs across all workspaces
+    // 5. generate code - one lib.rs from all included programs
+    // 6. enable incremental builds for all included programs
 
-    let manifest_config = io::parse_manifest_config(&cargo_manifest_dir)?;
-    let filter = ProgramFilter::from(&manifest_config);
-    let programs = workspace.find_solana_programs(&filter);
+    let config = Config::load(&cargo_manifest_dir)?;
 
-    builder::build_programs(&cargo_target_dir, &programs)?;
+    let workspaces = workspace::load_workspaces(&config)?;
 
-    io::write_lib_file(&cargo_manifest_dir, &programs)?;
+    let discovered_programs = workspaces
+        .iter()
+        .map(|w| w.discover_programs())
+        .collect::<Result<Vec<_>, _>>()?;
 
-    io::setup_incremental_builds(&programs)?;
+    // Extract all programs for building and code generation
+    let included_programs: Vec<SolanaProgram> = discovered_programs
+        .iter()
+        .flat_map(|w| w.included.iter().cloned())
+        .collect();
 
-    Ok(GenerationResult::new(programs))
+    builder::build_programs(&cargo_target_dir, &included_programs)?;
+
+    let code = codegen::generate(&included_programs)?;
+    codegen::save(&cargo_manifest_dir, &code)?;
+
+    enable_incremental_builds(&included_programs)?;
+
+    let mode = match &config {
+        Config::Magic => "magic".to_string(),
+        Config::Pedantic { .. } => "pedantic".to_string(),
+    };
+
+    Ok(GenerationResult::new(mode, discovered_programs))
 }
 
-/// This function is only available when the "testing" feature is enabled.
-#[cfg(feature = "testing")]
-pub fn generate_with_manifest_dir(
-    cargo_manifest_dir: &str,
-) -> Result<GenerationResult, ElfMagicError> {
-    temp_env::with_var("CARGO_MANIFEST_DIR", Some(cargo_manifest_dir), generate)
+/// Enable incremental builds for each program
+fn enable_incremental_builds(programs: &[SolanaProgram]) -> Result<(), Error> {
+    for program in programs {
+        println!("cargo:rerun-if-changed={}", program.manifest_path.display());
+    }
+    Ok(())
 }
