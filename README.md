@@ -1,7 +1,7 @@
 # elf-magic ✨
 
 > **⚠️ UNDER CONSTRUCTION ⚠️**  
-> **This crate is in active development and has not been tested in production environments.**  
+> **This crate is in active development and is not well tested yet.**  
 > **APIs may change without notice. Use at your own risk.**
 
 > It just works, don't ask how.
