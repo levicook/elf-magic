@@ -25,7 +25,10 @@ pub fn load_workspaces(config: &Config) -> Result<Vec<Workspace>, Error> {
                 exclude_patterns: vec![],
             }])
         }
-        Config::Pedantic { workspaces } => {
+        Config::Pedantic {
+            workspaces,
+            global_exclude,
+        } => {
             let mut results = Vec::new();
             for workspace in workspaces {
                 let metadata = MetadataCommand::new()
@@ -33,12 +36,15 @@ pub fn load_workspaces(config: &Config) -> Result<Vec<Workspace>, Error> {
                     .exec()?;
 
                 let manifest_path = workspace.manifest_path.clone();
-                let exclude = workspace.exclude_patterns.clone();
+
+                // Merge global excludes with workspace-specific excludes
+                let mut merged_excludes = global_exclude.clone();
+                merged_excludes.extend(workspace.exclude_patterns.clone());
 
                 results.push(Workspace {
                     metadata,
                     manifest_path,
-                    exclude_patterns: exclude,
+                    exclude_patterns: merged_excludes,
                 });
             }
             Ok(results)
@@ -284,7 +290,29 @@ mod tests {
 
     #[test]
     fn test_matches_glob_invalid_pattern() {
-        // Invalid glob patterns should return false
-        assert!(!matches_glob("test", "[")); // Unclosed bracket
+        // Invalid glob pattern should not match anything
+        assert!(!matches_glob("test", "[invalid"));
+    }
+
+    #[test]
+    fn test_global_exclude_merging() {
+        let program1 = sample_program("my_target", "apl-token");
+        let program2 = sample_program("test_target", "my_package");
+        let program3 = sample_program("my_target", "dev-package");
+
+        // Test merging: global excludes + workspace excludes
+        let global_excludes = vec!["package:apl-*".to_string()];
+        let workspace_excludes = vec!["target:test*".to_string()];
+        let mut merged_excludes = global_excludes.clone();
+        merged_excludes.extend(workspace_excludes);
+
+        // program1 should be excluded by global exclude (package:apl-*)
+        assert!(!should_include_program(&program1, &merged_excludes));
+
+        // program2 should be excluded by workspace exclude (target:test*)
+        assert!(!should_include_program(&program2, &merged_excludes));
+
+        // program3 should be included (matches neither pattern)
+        assert!(should_include_program(&program3, &merged_excludes));
     }
 }

@@ -14,7 +14,11 @@ pub enum Config {
     Magic, // No fields! Just "run cargo metadata here"
 
     #[serde(rename = "pedantic")]
-    Pedantic { workspaces: Vec<WorkspaceConfig> },
+    Pedantic {
+        workspaces: Vec<WorkspaceConfig>,
+        #[serde(default)]
+        global_exclude: Vec<String>,
+    },
 }
 
 impl Config {
@@ -140,12 +144,16 @@ workspaces = [
         let config = Config::load(&manifest_dir).unwrap();
 
         match config {
-            Config::Pedantic { workspaces } => {
+            Config::Pedantic {
+                workspaces,
+                global_exclude,
+            } => {
                 assert_eq!(workspaces.len(), 2);
                 assert_eq!(workspaces[0].manifest_path, "./Cargo.toml");
                 assert_eq!(workspaces[0].exclude_patterns.len(), 0);
                 assert_eq!(workspaces[1].manifest_path, "examples/basic/Cargo.toml");
                 assert_eq!(workspaces[1].exclude_patterns, vec!["target:test*"]);
+                assert_eq!(global_exclude.len(), 0); // No global excludes in this test
             }
             _ => panic!("Expected Pedantic mode"),
         }
@@ -170,12 +178,16 @@ workspaces = [
         let config = Config::load(&manifest_dir).unwrap();
 
         match config {
-            Config::Pedantic { workspaces } => {
+            Config::Pedantic {
+                workspaces,
+                global_exclude,
+            } => {
                 assert_eq!(workspaces.len(), 1);
                 assert_eq!(
                     workspaces[0].exclude_patterns,
                     vec!["target:test*", "package:dev*"]
                 );
+                assert_eq!(global_exclude.len(), 0); // No global excludes in this test
             }
             _ => panic!("Expected Pedantic mode"),
         }
@@ -258,8 +270,55 @@ workspaces = [
         let config = Config::load(&manifest_dir).unwrap();
 
         match config {
-            Config::Pedantic { workspaces } => {
+            Config::Pedantic {
+                workspaces,
+                global_exclude,
+            } => {
                 assert_eq!(workspaces[0].exclude_patterns.len(), 0); // Should default to empty
+                assert_eq!(global_exclude.len(), 0); // Should default to empty
+            }
+            _ => panic!("Expected Pedantic mode"),
+        }
+    }
+
+    #[test]
+    fn test_load_config_with_global_exclude() {
+        let manifest_content = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+edition = "2021"
+
+[package.metadata.elf-magic]
+mode = "pedantic"
+global_exclude = ["package:apl-token", "package:apl-associated-token-account"]
+workspaces = [
+    { manifest_path = "./Cargo.toml" },
+    { manifest_path = "examples/escrow/Cargo.toml", exclude = ["target:test*"] }
+]
+"#;
+
+        let (_temp_dir, manifest_dir) = create_temp_manifest(manifest_content);
+        let config = Config::load(&manifest_dir).unwrap();
+
+        match config {
+            Config::Pedantic {
+                workspaces,
+                global_exclude,
+            } => {
+                assert_eq!(workspaces.len(), 2);
+                assert_eq!(
+                    global_exclude,
+                    vec!["package:apl-token", "package:apl-associated-token-account"]
+                );
+
+                // First workspace has no local excludes
+                assert_eq!(workspaces[0].manifest_path, "./Cargo.toml");
+                assert_eq!(workspaces[0].exclude_patterns.len(), 0);
+
+                // Second workspace has local excludes
+                assert_eq!(workspaces[1].manifest_path, "examples/escrow/Cargo.toml");
+                assert_eq!(workspaces[1].exclude_patterns, vec!["target:test*"]);
             }
             _ => panic!("Expected Pedantic mode"),
         }
