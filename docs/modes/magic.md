@@ -20,7 +20,7 @@ version = "0.1.0"
 edition = "2021"
 
 [build-dependencies]
-elf-magic = "0.2"
+elf-magic = "0.3"
 ```
 
 ### Explicit Magic Mode
@@ -34,7 +34,7 @@ edition = "2021"
 mode = "magic"
 
 [build-dependencies]
-elf-magic = "0.2"
+elf-magic = "0.3"
 ```
 
 ## How It Works

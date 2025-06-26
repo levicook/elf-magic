@@ -2,6 +2,8 @@
 
 > Automatic compile-time ELF exports for Solana programs. One-liner integration, zero config, just works.
 
+🚀 **New in 0.3**: Intuitive configuration language with `only`/`deny` semantics, comprehensive documentation, and laser-eyes precision targeting!
+
 Stop wrestling with Solana program builds. `elf-magic` automatically discovers all your programs, builds them, and generates clean Rust code so your ELF bytes are always available as constants.
 
 ## Quick Start
@@ -12,12 +14,14 @@ cargo new my-elves --lib
 ```
 
 Add to `my-elves/Cargo.toml`:
+
 ```toml
 [build-dependencies]
-elf-magic = "0.2"
+elf-magic = "0.3"
 ```
 
 Add to `my-elves/build.rs`:
+
 ```rust
 fn main() { elf_magic::generate().unwrap(); }
 ```
@@ -44,6 +48,7 @@ pub fn elves() -> Vec<(&'static str, &'static [u8])> {
 ```
 
 Use your programs anywhere:
+
 ```rust
 use my_elves::{TOKEN_MANAGER_ELF, GOVERNANCE_ELF};
 
@@ -54,14 +59,19 @@ let program_id = deploy_program(TOKEN_MANAGER_ELF)?;
 ## Three Modes for Every Workflow
 
 ### 🪄 [Magic Mode](docs/modes/magic.md) (Default)
+
 **Zero config, just works**
+
 ```bash
 cargo build  # Discovers and builds all programs automatically
 ```
+
 Perfect for: Single workspaces, development, getting started
 
-### 🎛️ [Permissive Mode](docs/modes/permissive.md)  
+### 🎛️ [Permissive Mode](docs/modes/permissive.md)
+
 **Multi-workspace with exclusions**
+
 ```toml
 [package.metadata.elf-magic]
 mode = "permissive"
@@ -71,10 +81,13 @@ workspaces = [
     { manifest_path = "examples/Cargo.toml" }
 ]
 ```
+
 Perfect for: Complex repos, excluding test programs, multi-workspace projects
 
 ### 🎯 [Laser Eyes Mode](docs/modes/laser-eyes.md)
+
 **Precision targeting**
+
 ```toml
 [package.metadata.elf-magic]
 mode = "laser-eyes"
@@ -82,11 +95,13 @@ workspaces = [
     { manifest_path = "./Cargo.toml", only = ["target:token_manager", "target:governance"] }
 ]
 ```
+
 Perfect for: Production builds, CI optimization, focused development
 
 ## Rich Build Reporting
 
 First build shows what's happening:
+
 ```bash
 $ cargo build
 Mode: magic (1 workspace specified)
@@ -109,7 +124,7 @@ The `+` shows included programs, `-` shows excluded programs.
 The magic behind the one-liner:
 
 1. **🔍 Auto-discovery**: `cargo metadata` finds all workspace members
-2. **🎯 Smart filtering**: `crate-type = ["cdylib"]` identifies Solana programs  
+2. **🎯 Smart filtering**: `crate-type = ["cdylib"]` identifies Solana programs
 3. **🔨 Automatic building**: `cargo build-sbf` runs when source changes
 4. **📝 Code generation**: Target names become `TARGET_NAME_ELF` constants
 5. **⚡ Incremental**: Only rebuilds what changed
@@ -117,15 +132,16 @@ The magic behind the one-liner:
 ## Installation
 
 Add to your ELF crate's `Cargo.toml`:
+
 ```toml
 [build-dependencies]
-elf-magic = "0.2"
+elf-magic = "0.3"
 ```
 
 ## Documentation
 
 - **🪄 [Magic Mode](docs/modes/magic.md)** - Zero config auto-discovery
-- **🎛️ [Permissive Mode](docs/modes/permissive.md)** - Multi-workspace with exclusions  
+- **🎛️ [Permissive Mode](docs/modes/permissive.md)** - Multi-workspace with exclusions
 - **🎯 [Laser Eyes Mode](docs/modes/laser-eyes.md)** - Precision targeting
 - **📖 [Usage Guide](docs/usage.md)** - Using your generated constants
 - **🏗️ [Architecture](docs/architecture.md)** - How it works under the hood
@@ -135,10 +151,11 @@ elf-magic = "0.2"
 Works with any workspace layout:
 
 **Single Workspace** (Magic Mode)
+
 ```
 my-workspace/
 ├── Cargo.toml            # Workspace root
-├── my-elves/             # Generated ELF exports  
+├── my-elves/             # Generated ELF exports
 │   ├── build.rs          # One-liner magic ✨
 │   └── src/lib.rs        # Auto-generated
 └── programs/
@@ -146,7 +163,8 @@ my-workspace/
     └── governance/
 ```
 
-**Multi-Workspace** (Permissive/Laser Eyes Mode)  
+**Multi-Workspace** (Permissive/Laser Eyes Mode)
+
 ```
 arch-network/
 ├── Cargo.toml            # Main workspace (5 programs)
