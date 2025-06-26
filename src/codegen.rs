@@ -13,7 +13,8 @@ const LIB_RS_TEMPLATE: &str = r#"
 {% for build_status in build_statuses -%}
 // {{ build_status.icon }} {{ build_status.program_name }} - {{ build_status.message }}
 {% endfor -%}
-
+// ------------------------------------------------------------
+// Constants
 {% for constant in constants -%}
 /// ELF binary for the {{ constant.program_name }} Solana program
 pub const {{ constant.constant_name }}: &[u8] = include_bytes!(env!("{{ constant.env_var }}"));
