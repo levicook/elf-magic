@@ -55,7 +55,7 @@ pub fn generate() -> Result<GenerationResult, Error> {
     codegen::save(&cargo_manifest_dir, &code)?;
 
     // Enable incremental builds for all programs (successful and failed)
-    enable_incremental_builds(&included_programs)?;
+    enable_incremental_builds(&cargo_manifest_dir, &included_programs)?;
 
     let mode = match &config {
         Config::Magic => "magic".to_string(),
@@ -66,9 +66,16 @@ pub fn generate() -> Result<GenerationResult, Error> {
 }
 
 /// Enable incremental builds for each program
-fn enable_incremental_builds(programs: &[SolanaProgram]) -> Result<(), Error> {
+fn enable_incremental_builds(
+    manifest_dir: &PathBuf,
+    programs: &[SolanaProgram],
+) -> Result<(), Error> {
+    let output_path = manifest_dir.join("src").join("lib.rs");
+    println!("cargo:rerun-if-changed={}", output_path.display());
+
     for program in programs {
-        println!("cargo:rerun-if-changed={}", program.manifest_path.display());
+        let program_root = program.manifest_path.parent().unwrap();
+        println!("cargo:rerun-if-changed={}", program_root.display());
     }
     Ok(())
 }
