@@ -1,89 +1,34 @@
 # elf-magic ✨
 
-> It just works, don't ask how.
-
-Actually, fine - here's how it works: You get a build.rs one-liner that generates compile-time ELF exports for every Solana program in your workspace.
+> Automatic compile-time ELF exports for Solana programs. One-liner integration, zero config, just works.
 
 Stop wrestling with Solana program builds. `elf-magic` automatically discovers all your programs, builds them, and generates clean Rust code so your ELF bytes are always available as constants.
 
 ## Quick Start
 
-<!--  FUTURE GOAL:
-**Option 1: Start Fresh**
-
 ```bash
-cargo install cargo-generate
-cd my-workspace/
-cargo generate levicook/elf-magic my-elves
-cd my-elves
-cargo build  # magic ✨
+# Create an ELF crate in your workspace
+cargo new my-elves --lib
 ```
 
-**Option 2: Add to Existing Workspace**
-
-```bash
-# Create an ELF crate in your workspace
-cargo new my-elves --lib
-
-# Add to my-elves/Cargo.toml
-[build-dependencies]
-elf-magic = "0.1"
-
-# Add to my-project-elves/build.rs
-fn main() { elf_magic::generate().unwrap(); }
-
-cargo build  # magic ✨
-``` -->
-
-**Add to Existing Workspace**
-
-```bash
-# Create an ELF crate in your workspace
-cargo new my-elves --lib
-
-# Add to my-elves/Cargo.toml
+Add to `my-elves/Cargo.toml`:
+```toml
 [build-dependencies]
 elf-magic = "0.2"
+```
 
-# Add to my-project-elves/build.rs
+Add to `my-elves/build.rs`:
+```rust
 fn main() { elf_magic::generate().unwrap(); }
+```
 
+```bash
 cargo build  # magic ✨
 ```
 
 ## What You Get
 
 After building, your ELF crate exports generated constants for every Solana program in your workspace:
-
-**On your first build**, you'll see rich reporting:
-
-```bash
-$ cargo build
-Mode: magic (1 workspace specified)
-
-Workspace: ./Cargo.toml
-  + token_manager
-  + governance
-
-Generated lib.rs with 2 Solana programs
-   Compiling token-manager v0.1.0
-   [... normal cargo build-sbf output ...]
-   Compiling governance v0.1.0
-   [... normal cargo build-sbf output ...]
-   Compiling my-elves v0.1.0
-   Finished dev [unoptimized + debuginfo] target(s)
-```
-
-The `+` shows included programs, `-` shows excluded programs. If you have exclusions:
-
-```bash
-Workspace: ./Cargo.toml
-  + token_manager
-  + governance
-  - test_program (excluded by pattern)
-```
-
-**New in v0.2.6**: Build status is also tracked in the generated code with helpful comments showing which programs built successfully and which failed.
 
 ```rust
 // Generated in src/lib.rs - never edit this file!
@@ -99,7 +44,6 @@ pub fn elves() -> Vec<(&'static str, &'static [u8])> {
 ```
 
 Use your programs anywhere:
-
 ```rust
 use my_elves::{TOKEN_MANAGER_ELF, GOVERNANCE_ELF};
 
@@ -107,328 +51,116 @@ use my_elves::{TOKEN_MANAGER_ELF, GOVERNANCE_ELF};
 let program_id = deploy_program(TOKEN_MANAGER_ELF)?;
 ```
 
-## How It Works
+## Three Modes for Every Workflow
 
-The one-liner sounds too good to be true, but here's the magic:
-
-1. **Configuration**: Load mode (Magic or Pedantic) from `Cargo.toml`
-2. **Workspace Loading**: Use `cargo metadata` to discover workspace(s)
-3. **Program Discovery**: Filter for crates with `crate-type = ["cdylib"]` - those are your Solana programs
-4. **Build Orchestration**: Run `cargo build-sbf` on each program automatically
-5. **Code Generation**: Transform program names into clean Rust constants and generate your entire `src/lib.rs`
-6. **Incremental Builds**: Set up `cargo:rerun-if-changed` so rebuilds only happen when needed
-
-Behind the scenes:
-
-- 🔍 **Auto-discovery**: `cargo metadata` finds all workspace members
-- 🎯 **Smart filtering**: `crate-type = ["cdylib"]` identifies Solana programs
-- 🔨 **Automatic building**: `cargo build-sbf` runs when source changes
-- 📝 **Code generation**: Target names become `TARGET_NAME_ELF` constants
-- ⚡ **Incremental**: Only rebuilds what changed
-- 🧙‍♂️ **Zero config**: Works with any workspace layout out of the box
-
-## Configuration: Magic vs Pedantic
-
-`elf-magic` has two modes that handle different workspace patterns you'll find in the wild:
-
-### Magic Mode (Default)
-
-**Perfect for single-workspace repos like Anza/Agave (52 programs in main workspace)**
-
+### 🪄 [Magic Mode](docs/modes/magic.md) (Default)
+**Zero config, just works**
 ```bash
-cargo build  # Just works, zero config ✨
+cargo build  # Discovers and builds all programs automatically
 ```
+Perfect for: Single workspaces, development, getting started
 
-Magic mode runs `cargo metadata` in your current workspace and builds every Solana program it finds. This is perfect for most projects where all programs live in one workspace.
-
-### Pedantic Mode
-
-**Essential for multi-workspace repos like Arch Network (5 programs in main + 14 example workspaces)**
-
+### 🎛️ [Permissive Mode](docs/modes/permissive.md)  
+**Multi-workspace with exclusions**
 ```toml
-# my-project-elves/Cargo.toml
 [package.metadata.elf-magic]
-mode = "pedantic"
-global_exclude = ["package:apl-token"]  # Apply to all workspaces (v0.2.6+)
+mode = "permissive"
+global_deny = ["package:*-test"]
 workspaces = [
-    { manifest_path = "./Cargo.toml" },
-    { manifest_path = "examples/basic/Cargo.toml" },
-    { manifest_path = "examples/advanced/Cargo.toml", exclude = ["target:test*"] }
+    { manifest_path = "./Cargo.toml", deny = ["target:dev*"] },
+    { manifest_path = "examples/Cargo.toml" }
 ]
 ```
+Perfect for: Complex repos, excluding test programs, multi-workspace projects
 
-Pedantic mode gives you explicit control over exactly which workspaces to process and which programs to exclude. Essential when you have:
+### 🎯 [Laser Eyes Mode](docs/modes/laser-eyes.md)
+**Precision targeting**
+```toml
+[package.metadata.elf-magic]
+mode = "laser-eyes"
+workspaces = [
+    { manifest_path = "./Cargo.toml", only = ["target:token_manager", "target:governance"] }
+]
+```
+Perfect for: Production builds, CI optimization, focused development
 
-- Multiple independent Cargo workspaces
-- Example workspaces separate from main workspace
-- Test programs you want to exclude
-- Fine-grained control requirements
+## Rich Build Reporting
 
-## Workspace Structure
+First build shows what's happening:
+```bash
+$ cargo build
+Mode: magic (1 workspace specified)
 
-Works with any layout. Here are the patterns we've tested:
+Workspace: ./Cargo.toml
+  + token_manager
+  + governance
 
-**Single Workspace (Magic Mode)**
+Generated lib.rs with 2 Solana programs
+   Compiling token-manager v0.1.0
+   Compiling governance v0.1.0
+   Compiling my-elves v0.1.0
+   Finished dev [unoptimized + debuginfo] target(s)
+```
 
+The `+` shows included programs, `-` shows excluded programs.
+
+## How It Works
+
+The magic behind the one-liner:
+
+1. **🔍 Auto-discovery**: `cargo metadata` finds all workspace members
+2. **🎯 Smart filtering**: `crate-type = ["cdylib"]` identifies Solana programs  
+3. **🔨 Automatic building**: `cargo build-sbf` runs when source changes
+4. **📝 Code generation**: Target names become `TARGET_NAME_ELF` constants
+5. **⚡ Incremental**: Only rebuilds what changed
+
+## Installation
+
+Add to your ELF crate's `Cargo.toml`:
+```toml
+[build-dependencies]
+elf-magic = "0.2"
+```
+
+## Documentation
+
+- **🪄 [Magic Mode](docs/modes/magic.md)** - Zero config auto-discovery
+- **🎛️ [Permissive Mode](docs/modes/permissive.md)** - Multi-workspace with exclusions  
+- **🎯 [Laser Eyes Mode](docs/modes/laser-eyes.md)** - Precision targeting
+- **📖 [Usage Guide](docs/usage.md)** - Using your generated constants
+- **🏗️ [Architecture](docs/architecture.md)** - How it works under the hood
+
+## Examples
+
+Works with any workspace layout:
+
+**Single Workspace** (Magic Mode)
 ```
 my-workspace/
 ├── Cargo.toml            # Workspace root
-├── my-elves/             # Generated ELF exports
+├── my-elves/             # Generated ELF exports  
 │   ├── build.rs          # One-liner magic ✨
-│   └── src/lib.rs        # Auto-generated, don't edit
+│   └── src/lib.rs        # Auto-generated
 └── programs/
     ├── token-manager/    # Your Solana programs
-    ├── governance/
-    └── whatever-else/
+    └── governance/
 ```
 
-**Multi-Workspace (Pedantic Mode)**
-
+**Multi-Workspace** (Permissive/Laser Eyes Mode)  
 ```
 arch-network/
 ├── Cargo.toml            # Main workspace (5 programs)
-├── elves/
-│   ├── build.rs          # elf_magic::generate().unwrap();
-│   └── Cargo.toml        # Pedantic config
-├── programs/             # Main programs
-│   ├── orderbook/
-│   └── apl-token/
+├── elves/                # ELF exports with advanced config
 └── examples/             # Separate workspaces
-    ├── basic/
-    │   └── Cargo.toml    # Independent workspace
-    └── advanced/
-        └── Cargo.toml    # Another independent workspace
+    ├── basic/Cargo.toml  # Independent workspace
+    └── advanced/Cargo.toml
 ```
-
-## Advanced Usage: Exclude Patterns
-
-Sometimes you want to exclude specific programs. Use exclude patterns with prefixes:
-
-```toml
-[package.metadata.elf-magic]
-mode = "pedantic"
-workspaces = [
-    {
-        manifest_path = "./Cargo.toml",
-        exclude = [
-            "target:test*",           # Exclude by target name
-            "package:*deprecated*",   # Exclude by package name
-            "path:*/examples/broken/*" # Exclude by manifest path
-        ]
-    }
-]
-```
-
-**Pattern Types:**
-
-- **`target:pattern`** - Match against the target name (from `[[bin]]` or `[lib]`)
-- **`package:pattern`** - Match against the package name
-- **`path:pattern`** - Match against the full manifest path
-
-**Pattern Syntax:**
-
-- `*` matches any characters: `test*` matches `test_program`, `testing`, etc.
-- `?` matches single character: `test?` matches `test1`, `testa`, but not `test12`
-- Standard glob patterns supported
-
-**Common Patterns:**
-
-```toml
-# Exclude all test programs
-exclude = ["target:test*", "target:*test*"]
-
-# Exclude development packages
-exclude = ["package:dev*", "package:*experimental*"]
-
-# Exclude specific paths
-exclude = ["path:*/examples/*", "path:*/deprecated/*"]
-
-# Mix and match
-exclude = [
-    "target:test*",
-    "package:dev*",
-    "path:*/broken/*"
-]
-```
-
-### Global Excludes (DRY Configuration)
-
-**New in v0.2.6** - Eliminate repetitive exclude patterns across workspaces:
-
-```toml
-[package.metadata.elf-magic]
-mode = "pedantic"
-# Define excludes once, apply everywhere
-global_exclude = ["package:apl-token", "package:apl-associated-token-account"]
-workspaces = [
-    { manifest_path = "../escrow/program/Cargo.toml" },           # Gets global excludes
-    { manifest_path = "../stake/program/Cargo.toml" },            # Gets global excludes  
-    { manifest_path = "../special/program/Cargo.toml", exclude = ["target:test*"] }, # Global + local excludes
-]
-```
-
-**Before Global Excludes:**
-```toml
-workspaces = [
-    { manifest_path = "../escrow/program/Cargo.toml", exclude = ["package:apl-token", "package:apl-associated-token-account"] },
-    { manifest_path = "../stake/program/Cargo.toml", exclude = ["package:apl-token", "package:apl-associated-token-account"] },
-    # Repetitive and error-prone 😞
-]
-```
-
-**After Global Excludes:**
-```toml
-global_exclude = ["package:apl-token", "package:apl-associated-token-account"]
-workspaces = [
-    { manifest_path = "../escrow/program/Cargo.toml" },
-    { manifest_path = "../stake/program/Cargo.toml" },
-    # Clean and maintainable ✨
-]
-```
-
-**How It Works:**
-- Global excludes apply to ALL workspaces automatically
-- Workspace-specific excludes are merged with global ones
-- Backward compatible - existing configs work unchanged
-
-## Partial Build Success
-
-**New in v0.2.6** - Build what you can instead of failing completely:
-
-### The Problem
-Previously, if ANY program failed to build, elf-magic would fail entirely - even if 9 out of 10 programs built successfully. This was frustrating for complex projects.
-
-### The Solution
-Now elf-magic builds what it can and clearly reports the results:
-
-**Generated lib.rs with build status:**
-```rust
-// This file is auto-generated by elf-magic
-// DO NOT EDIT MANUALLY - Changes will be overwritten
-//
-// Build Status:
-// ✓ helloworldprogram - SUCCESS
-// ✓ pda_program - SUCCESS
-// ✓ counter_program - SUCCESS
-// ✓ escrow_program - SUCCESS
-// ✗ orderbook_program - FAILED: wasi crate contains multiple cdylib targets
-
-/// ELF binary for the helloworldprogram Solana program
-pub const HELLOWORLDPROGRAM_ELF: &[u8] = include_bytes!(env!("HELLOWORLDPROGRAM_ELF_PATH"));
-
-// ... only successful programs included
-
-pub fn elves() -> Vec<(&'static str, &'static [u8])> {
-    vec![
-        ("helloworldprogram", HELLOWORLDPROGRAM_ELF),
-        // ... only successful programs included
-    ]
-}
-```
-
-**Benefits:**
-- **Partial success**: Work with successful programs while debugging failures
-- **Clear feedback**: Build status visible in generated code
-- **Iterative development**: No more "all or nothing" blocking behavior
-- **Better DX**: Perfect for complex projects where some programs have dependency issues
-
-## Real-World Examples
-
-**Anza/Agave Pattern** (52 programs, single workspace)
-
-```bash
-# Zero config needed
-cargo new elves --lib
-echo 'fn main() { elf_magic::generate().unwrap(); }' > elves/build.rs
-cd elves && cargo build
-```
-
-**Arch Network Pattern** (5 main + 14 example workspaces)
-
-```toml
-[package.metadata.elf-magic]
-mode = "pedantic"
-workspaces = [
-    { manifest_path = "./Cargo.toml" },
-    { manifest_path = "examples/basic/program/Cargo.toml" },
-    { manifest_path = "examples/cpi/program/Cargo.toml" },
-    # ... 12 more example workspaces
-]
-```
-
-Without pedantic mode, you'd only get the 5 programs from the main workspace. With pedantic mode, you get all 19 programs across all workspaces.
-
-## Why elf-magic? The tl;dr
-
-**Before:**
-
-- Run `cargo build-sbf` manually for each program
-- Hard-code filesystem paths to .so files in your code
-- Get runtime panics when files aren't where you expect
-- Context-switch between `cargo` and Solana-specific tooling
-- Remember which programs need rebuilding and when
-- Hunt down missing program files across environments
-
-**After:**
-
-```bash
-cargo build  # Just standard Cargo, always
-```
-
-Your ELF bytes are always available as clean, typed constants. No more bespoke build commands. No more tracking file paths. Just `cargo build` and everything works.
-
-The magic happens behind the scenes - `elf-magic` runs `cargo build-sbf` when needed, but you never have to think about it.
-
-## Why elf-magic? The manifesto
-
-### The Real Problem: Missing Engineering Practices
-
-Solana development suffers from a **tooling gap** that makes essential software engineering practices unnecessarily difficult:
-
-**Testing is broken.** Most projects can't easily unit test their program interactions because ELF bytes aren't available at compile time. Developers resort to:
-
-- Hard-coded file paths that break in CI
-- Runtime discovery that fails unpredictably
-- Skipping integration tests entirely
-
-**Benchmarking is impossible.** You can't benchmark program deployment or interaction patterns when your toolchain can't reliably find program binaries.
-
-**Auditing is compromised.** Security reviews need to verify the exact program bytes being deployed, but most projects have fragile, bespoke build processes that obscure this.
-
-### The Developer Experience Tax
-
-Every Solana project pays this tax:
-
-- **Context switching** between `cargo` and Solana-specific commands
-- **Runtime panics** when files aren't where expected
-- **Environment-specific builds** that work locally but fail in CI
-- **Fragile deployment scripts** that break when paths change
-
-### elf-magic Fixes This
-
-**Clear Rust dependencies.** Your program binaries become compile-time constants with normal Rust visibility and dependency management.
-
-**Standard toolchain.** Just `cargo build`, `cargo test`, `cargo bench`. No special commands, no custom scripts.
-
-**Reliable CI/CD.** Deterministic builds that work the same everywhere.
-
-**Better testing.** Write unit tests that actually test your program interactions:
-
-```rust
-#[test]
-fn test_token_manager_deployment() {
-    let program_id = deploy_program(my_elves::TOKEN_MANAGER_ELF)?;
-    let mint = create_mint(&program_id)?;
-    assert!(mint.is_initialized());
-}
-```
-
-**Professional auditing.** Auditors can verify exact program bytes with confidence.
-
-elf-magic doesn't just automate builds - it enables the software engineering practices that make Solana projects reliable, testable, and maintainable.
 
 ## Requirements
 
-- Rust toolchain
-- Solana CLI tools (`cargo build-sbf` must work)
-- Workspace with Solana programs (crates with `crate-type = ["cdylib"]`)
+- Rust 2021 edition
+- [Solana CLI tools](https://docs.solana.com/cli/install-solana-cli-tools) for `cargo build-sbf`
+
+## License
+
+MIT

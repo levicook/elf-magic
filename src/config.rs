@@ -6,18 +6,23 @@ use crate::error::Error;
 
 /// Configuration for elf-magic from package.metadata.elf-magic
 ///
-/// Clean two-mode system: Magic (default single workspace) vs Pedantic (multi-workspace)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Clean three-mode system: Magic (default single workspace) vs Permissive (multi-workspace with excludes) vs Laser Eyes (multi-workspace with includes)
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "mode", rename_all = "kebab-case")]
 pub enum Config {
     #[serde(rename = "magic")]
     Magic, // No fields! Just "run cargo metadata here"
 
-    #[serde(rename = "pedantic")]
-    Pedantic {
-        workspaces: Vec<WorkspaceConfig>,
+    #[serde(rename = "laser-eyes")]
+    LaserEyes {
+        workspaces: Vec<LaserEyesWorkspaceConfig>,
+    },
+
+    #[serde(rename = "permissive")]
+    Permissive {
+        workspaces: Vec<PermissiveWorkspaceConfig>,
         #[serde(default)]
-        global_exclude: Vec<String>,
+        global_deny: Vec<String>,
     },
 }
 
@@ -62,13 +67,20 @@ impl Default for Config {
     }
 }
 
-/// Configuration for a single workspace in pedantic mode
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkspaceConfig {
+/// Configuration for a single workspace in laser-eyes mode
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct LaserEyesWorkspaceConfig {
+    pub manifest_path: String,
+    pub only: Vec<String>,
+}
+
+/// Configuration for a single workspace in permissive mode
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PermissiveWorkspaceConfig {
     pub manifest_path: String,
     #[serde(default)]
     #[serde(alias = "exclude")]
-    pub exclude_patterns: Vec<String>,
+    pub deny: Vec<String>,
 }
 
 #[cfg(test)]
@@ -125,7 +137,7 @@ mode = "magic"
     }
 
     #[test]
-    fn test_load_config_pedantic_mode() {
+    fn test_load_config_permissive_mode() {
         let manifest_content = r#"
 [package]
 name = "test-package"
@@ -133,10 +145,10 @@ version = "0.1.0"
 edition = "2021"
 
 [package.metadata.elf-magic]
-mode = "pedantic"
+mode = "permissive"
 workspaces = [
     { manifest_path = "./Cargo.toml" },
-    { manifest_path = "examples/basic/Cargo.toml", exclude_patterns = ["target:test*"] }
+    { manifest_path = "examples/basic/Cargo.toml", deny = ["target:test*"] }
 ]
 "#;
 
@@ -144,23 +156,23 @@ workspaces = [
         let config = Config::load(&manifest_dir).unwrap();
 
         match config {
-            Config::Pedantic {
+            Config::Permissive {
                 workspaces,
-                global_exclude,
+                global_deny,
             } => {
                 assert_eq!(workspaces.len(), 2);
                 assert_eq!(workspaces[0].manifest_path, "./Cargo.toml");
-                assert_eq!(workspaces[0].exclude_patterns.len(), 0);
+                assert_eq!(workspaces[0].deny.len(), 0);
                 assert_eq!(workspaces[1].manifest_path, "examples/basic/Cargo.toml");
-                assert_eq!(workspaces[1].exclude_patterns, vec!["target:test*"]);
-                assert_eq!(global_exclude.len(), 0); // No global excludes in this test
+                assert_eq!(workspaces[1].deny, vec!["target:test*"]);
+                assert_eq!(global_deny.len(), 0); // No global excludes in this test
             }
-            _ => panic!("Expected Pedantic mode"),
+            _ => panic!("Expected Permissive mode"),
         }
     }
 
     #[test]
-    fn test_load_config_pedantic_mode_with_exclude_alias() {
+    fn test_load_config_permissive_mode_with_exclude_alias() {
         let manifest_content = r#"
 [package]
 name = "test-package"
@@ -168,7 +180,7 @@ version = "0.1.0"
 edition = "2021"
 
 [package.metadata.elf-magic]
-mode = "pedantic"
+mode = "permissive"
 workspaces = [
     { manifest_path = "./Cargo.toml", exclude = ["target:test*", "package:dev*"] }
 ]
@@ -178,18 +190,15 @@ workspaces = [
         let config = Config::load(&manifest_dir).unwrap();
 
         match config {
-            Config::Pedantic {
+            Config::Permissive {
                 workspaces,
-                global_exclude,
+                global_deny,
             } => {
                 assert_eq!(workspaces.len(), 1);
-                assert_eq!(
-                    workspaces[0].exclude_patterns,
-                    vec!["target:test*", "package:dev*"]
-                );
-                assert_eq!(global_exclude.len(), 0); // No global excludes in this test
+                assert_eq!(workspaces[0].deny, vec!["target:test*", "package:dev*"]);
+                assert_eq!(global_deny.len(), 0); // No global excludes in this test
             }
-            _ => panic!("Expected Pedantic mode"),
+            _ => panic!("Expected Permissive mode"),
         }
     }
 
@@ -260,7 +269,7 @@ version = "0.1.0"
 edition = "2021"
 
 [package.metadata.elf-magic]
-mode = "pedantic"
+mode = "permissive"
 workspaces = [
     { manifest_path = "./Cargo.toml" }
 ]
@@ -270,14 +279,14 @@ workspaces = [
         let config = Config::load(&manifest_dir).unwrap();
 
         match config {
-            Config::Pedantic {
+            Config::Permissive {
                 workspaces,
-                global_exclude,
+                global_deny,
             } => {
-                assert_eq!(workspaces[0].exclude_patterns.len(), 0); // Should default to empty
-                assert_eq!(global_exclude.len(), 0); // Should default to empty
+                assert_eq!(workspaces[0].deny.len(), 0); // Should default to empty
+                assert_eq!(global_deny.len(), 0); // Should default to empty
             }
-            _ => panic!("Expected Pedantic mode"),
+            _ => panic!("Expected Permissive mode"),
         }
     }
 
@@ -290,11 +299,11 @@ version = "0.1.0"
 edition = "2021"
 
 [package.metadata.elf-magic]
-mode = "pedantic"
-global_exclude = ["package:apl-token", "package:apl-associated-token-account"]
+mode = "permissive"
+global_deny = ["package:apl-token", "package:apl-associated-token-account"]
 workspaces = [
     { manifest_path = "./Cargo.toml" },
-    { manifest_path = "examples/escrow/Cargo.toml", exclude = ["target:test*"] }
+    { manifest_path = "examples/escrow/Cargo.toml", deny = ["target:test*"] }
 ]
 "#;
 
@@ -302,25 +311,122 @@ workspaces = [
         let config = Config::load(&manifest_dir).unwrap();
 
         match config {
-            Config::Pedantic {
+            Config::Permissive {
                 workspaces,
-                global_exclude,
+                global_deny,
             } => {
                 assert_eq!(workspaces.len(), 2);
                 assert_eq!(
-                    global_exclude,
+                    global_deny,
                     vec!["package:apl-token", "package:apl-associated-token-account"]
                 );
 
                 // First workspace has no local excludes
                 assert_eq!(workspaces[0].manifest_path, "./Cargo.toml");
-                assert_eq!(workspaces[0].exclude_patterns.len(), 0);
+                assert_eq!(workspaces[0].deny.len(), 0);
 
                 // Second workspace has local excludes
                 assert_eq!(workspaces[1].manifest_path, "examples/escrow/Cargo.toml");
-                assert_eq!(workspaces[1].exclude_patterns, vec!["target:test*"]);
+                assert_eq!(workspaces[1].deny, vec!["target:test*"]);
             }
-            _ => panic!("Expected Pedantic mode"),
+            _ => panic!("Expected Permissive mode"),
+        }
+    }
+
+    #[test]
+    fn test_load_config_laser_eyes_mode() {
+        let manifest_content = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+edition = "2021"
+
+[package.metadata.elf-magic]
+mode = "laser-eyes"
+workspaces = [
+    { manifest_path = "./Cargo.toml", only = ["target:token_manager", "target:governance"] },
+    { manifest_path = "examples/defi/Cargo.toml", only = ["target:swap*", "package:my-*-program"] }
+]
+"#;
+
+        let (_temp_dir, manifest_dir) = create_temp_manifest(manifest_content);
+        let config = Config::load(&manifest_dir).unwrap();
+
+        match config {
+            Config::LaserEyes { workspaces } => {
+                assert_eq!(workspaces.len(), 2);
+
+                // First workspace
+                assert_eq!(workspaces[0].manifest_path, "./Cargo.toml");
+                assert_eq!(
+                    workspaces[0].only,
+                    vec!["target:token_manager", "target:governance"]
+                );
+
+                // Second workspace
+                assert_eq!(workspaces[1].manifest_path, "examples/defi/Cargo.toml");
+                assert_eq!(
+                    workspaces[1].only,
+                    vec!["target:swap*", "package:my-*-program"]
+                );
+            }
+            _ => panic!("Expected LaserEyes mode"),
+        }
+    }
+
+    #[test]
+    fn test_load_config_laser_eyes_mode_single_workspace() {
+        let manifest_content = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+edition = "2021"
+
+[package.metadata.elf-magic]
+mode = "laser-eyes"
+workspaces = [
+    { manifest_path = "./Cargo.toml", only = ["target:my_program"] }
+]
+"#;
+
+        let (_temp_dir, manifest_dir) = create_temp_manifest(manifest_content);
+        let config = Config::load(&manifest_dir).unwrap();
+
+        match config {
+            Config::LaserEyes { workspaces } => {
+                assert_eq!(workspaces.len(), 1);
+                assert_eq!(workspaces[0].manifest_path, "./Cargo.toml");
+                assert_eq!(workspaces[0].only, vec!["target:my_program"]);
+            }
+            _ => panic!("Expected LaserEyes mode"),
+        }
+    }
+
+    #[test]
+    fn test_load_config_laser_eyes_mode_empty_include() {
+        let manifest_content = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+edition = "2021"
+
+[package.metadata.elf-magic]
+mode = "laser-eyes"
+workspaces = [
+    { manifest_path = "./Cargo.toml", only = [] }
+]
+"#;
+
+        let (_temp_dir, manifest_dir) = create_temp_manifest(manifest_content);
+        let config = Config::load(&manifest_dir).unwrap();
+
+        match config {
+            Config::LaserEyes { workspaces } => {
+                assert_eq!(workspaces.len(), 1);
+                assert_eq!(workspaces[0].manifest_path, "./Cargo.toml");
+                assert_eq!(workspaces[0].only.len(), 0);
+            }
+            _ => panic!("Expected LaserEyes mode"),
         }
     }
 }

@@ -75,7 +75,7 @@ pub struct DiscoveredPrograms {
 /// Result of the entire generation process with rich reporting
 #[derive(Debug)]
 pub struct GenerationResult {
-    pub discovery_mode: String, // "magic" or "pedantic"
+    pub discovery_mode: String, // "magic", "permissive", or "laser-eyes"
     pub discovered_programs: Vec<DiscoveredPrograms>,
 }
 
@@ -99,7 +99,7 @@ impl fmt::Display for GenerationResult {
             }
 
             for excluded in &workspace.excluded {
-                writeln!(f, "  - {} (excluded by pattern)", excluded.target_name)?;
+                writeln!(f, "  - {} (denied by pattern)", excluded.target_name)?;
             }
 
             if workspace.included.is_empty() && workspace.excluded.is_empty() {
@@ -242,12 +242,12 @@ mod tests {
             excluded: vec![excluded_program],
         };
 
-        let result = GenerationResult::new("pedantic".to_string(), vec![discovered]);
+        let result = GenerationResult::new("permissive".to_string(), vec![discovered]);
         let display = format!("{}", result);
 
-        assert!(display.contains("Mode: pedantic"));
+        assert!(display.contains("Mode: permissive"));
         assert!(display.contains("  + good_target"));
-        assert!(display.contains("  - bad_target (excluded by pattern)"));
+        assert!(display.contains("  - bad_target (denied by pattern)"));
         assert!(display.contains("Generated lib.rs with 1 Solana program"));
     }
 
@@ -292,7 +292,8 @@ mod tests {
             excluded: vec![],
         };
 
-        let result = GenerationResult::new("pedantic".to_string(), vec![discovered1, discovered2]);
+        let result =
+            GenerationResult::new("permissive".to_string(), vec![discovered1, discovered2]);
         let programs = result.programs();
 
         assert_eq!(programs.len(), 2);

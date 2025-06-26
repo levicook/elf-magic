@@ -1,6 +1,6 @@
 mod builder;
 mod codegen;
-mod config;
+pub mod config;
 mod error;
 mod programs;
 mod workspace;
@@ -61,8 +61,9 @@ pub fn generate() -> Result<GenerationResult, Error> {
     enable_incremental_builds(&cargo_manifest_dir, &included_programs)?;
 
     let mode = match &config {
+        Config::LaserEyes { .. } => "laser-eyes".to_string(),
         Config::Magic => "magic".to_string(),
-        Config::Pedantic { .. } => "pedantic".to_string(),
+        Config::Permissive { .. } => "permissive".to_string(),
     };
 
     Ok(GenerationResult::new(mode, discovered_programs))
