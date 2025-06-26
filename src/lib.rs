@@ -5,7 +5,10 @@ mod error;
 mod programs;
 mod workspace;
 
-use std::{env, path::PathBuf};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
 use crate::{
     config::Config,
@@ -66,10 +69,7 @@ pub fn generate() -> Result<GenerationResult, Error> {
 }
 
 /// Enable incremental builds for each program
-fn enable_incremental_builds(
-    manifest_dir: &PathBuf,
-    programs: &[SolanaProgram],
-) -> Result<(), Error> {
+fn enable_incremental_builds(manifest_dir: &Path, programs: &[SolanaProgram]) -> Result<(), Error> {
     let output_path = manifest_dir.join("src").join("lib.rs");
     println!("cargo:rerun-if-changed={}", output_path.display());
 
