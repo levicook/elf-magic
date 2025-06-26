@@ -85,7 +85,12 @@ fn deduplicate_programs(programs: Vec<SolanaProgram>) -> Vec<SolanaProgram> {
         seen.entry(program.manifest_path.clone()).or_insert(program);
     }
 
-    seen.into_values().collect()
+    let mut deduplicated: Vec<SolanaProgram> = seen.into_values().collect();
+
+    // Sort by target_name to ensure consistent alphabetical ordering
+    deduplicated.sort_by(|a, b| a.target_name.cmp(&b.target_name));
+
+    deduplicated
 }
 
 #[cfg(test)]
