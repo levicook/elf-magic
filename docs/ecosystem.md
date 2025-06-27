@@ -151,28 +151,100 @@ _This section is for people who want to contribute ecosystem packages or underst
 
 ### Release Process
 
-Ecosystem packages use a **local preparation + GitHub automation** workflow:
+Ecosystem packages use a **maintainer-controlled + GitHub validation** workflow:
 
-```bash
-# 1. Prepare release locally (lightweight)
-make prepare-ecosystem-release ECOSYSTEM=solana-spl-token VERSION=3.5.0
+**What maintainers do:**
 
-# 2. Push to trigger GitHub workflow (heavy lifting)
-git push origin main ecosystem/solana-spl-token/v3.5.0
-```
+- Update git submodule to upstream tag
+- Update Cargo.toml version and dependencies
+- Create commit and tag
+- Push to trigger CI
 
-**Local preparation:**
+**What GitHub CI does:**
 
-- Updates git submodule to upstream tag
-- Synchronizes Cargo.toml version
-- Creates atomic commit + tag
+- Validates the package (build, test, clippy)
+- Publishes to crates.io (only if validation passes)
+- Creates GitHub release with changelog
 
-**GitHub automation:**
+**Key principle: Maintainers control all file changes. CI only validates and publishes.**
 
-- ELF generation in clean environment
-- Comprehensive validation (tests, clippy)
-- Transparent crates.io publication
-- GitHub release with changelog
+### How to Release an Ecosystem Package
+
+Example: Releasing `solana-spl-token` version `3.5.0`
+
+1. **Update submodule to target version**:
+
+   ```bash
+   cd ecosystem/solana-spl-token/upstream
+   git fetch --tags
+   git checkout v3.5.0
+   
+   # Verify you're on the exact tag
+   git describe --exact-match --tags
+   # Should output: v3.5.0
+   
+   # Ensure no uncommitted changes in submodule
+   git status --porcelain
+   # Should be empty
+   
+   cd ../../..
+   ```
+
+2. **Update package version**:
+
+   ```bash
+   # Edit ecosystem/solana-spl-token/Cargo.toml
+   version = "3.5.0"
+   description = "Pre-built ELF exports for Solana SPL Token program v3.5.0"
+   ```
+
+3. **Generate and review the exported constants**:
+
+   ```bash
+   cd ecosystem/solana-spl-token
+   cargo build
+   # Review generated src/lib.rs - verify expected ELF constants are exported
+   ```
+
+4. **Write validation tests** (required):
+
+   ```rust
+   // Create tests/integration.rs - validation will fail without tests
+   use elf_magic_solana_spl_token::*;
+
+   #[test]
+   fn validate_elf_constants() {
+       assert!(!SPL_TOKEN_PROGRAM_ELF.is_empty());
+       assert!(!SPL_TOKEN_P_TOKEN_ELF.is_empty());
+       assert_eq!(&SPL_TOKEN_PROGRAM_ELF[0..4], b"\x7fELF");
+       assert_eq!(&SPL_TOKEN_P_TOKEN_ELF[0..4], b"\x7fELF");
+   }
+   ```
+
+5. **Validate the package**:
+
+   ```bash
+   make validate-ecosystem-package MANIFEST_PATH=ecosystem/solana-spl-token/Cargo.toml
+   ```
+
+6. **Commit, tag, and push**:
+   ```bash
+   # Stage the submodule commit hash first
+   git add ecosystem/solana-spl-token/upstream
+   
+   # Stage other changes
+   git add ecosystem/solana-spl-token/Cargo.toml ecosystem/solana-spl-token/tests/
+   
+   # Verify what you're committing
+   git status
+   git diff --cached
+   
+   git commit -m "Release elf-magic-solana-spl-token v3.5.0"
+   git tag ecosystem/solana-spl-token/v3.5.0
+   git push origin main ecosystem/solana-spl-token/v3.5.0
+   ```
+
+CI will validate, publish to crates.io, and create a GitHub release.
 
 ### Adding New Ecosystem Packages
 

@@ -19,35 +19,20 @@ jobs:
       version: ${{ steps.parse.outputs.version }}
       manifest_path: ${{ steps.parse.outputs.manifest_path }}
     steps:
+      - uses: actions/checkout@v4
       - name: Parse ecosystem tag
         id: parse
         run: |
-          # Tag format: ecosystem/solana-spl-token/v3.4.0
-          TAG="${GITHUB_REF#refs/tags/}"
-          echo "Full tag: $TAG"
+          # Use make to parse the tag
+          eval $(make parse-ecosystem-tag TAG="${GITHUB_REF#refs/tags/}")
           
-          # Extract ecosystem name (solana-spl-token)
-          ECOSYSTEM_NAME=$(echo "$TAG" | cut -d'/' -f2)
+          # Set GitHub outputs
           echo "ecosystem_name=$ECOSYSTEM_NAME" >> $GITHUB_OUTPUT
-          
-          # Extract version (3.4.0)
-          VERSION=$(echo "$TAG" | cut -d'/' -f3 | sed 's/^v//')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          
-          # Generate package name (elf-magic-solana-spl-token)
-          PACKAGE_NAME="elf-magic-$ECOSYSTEM_NAME"
           echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
-          
-          # Generate manifest path
-          MANIFEST_PATH="ecosystem/$ECOSYSTEM_NAME/Cargo.toml"
           echo "manifest_path=$MANIFEST_PATH" >> $GITHUB_OUTPUT
-          
-          echo "Ecosystem: $ECOSYSTEM_NAME"
-          echo "Package: $PACKAGE_NAME"
-          echo "Version: $VERSION"
-          echo "Manifest: $MANIFEST_PATH"
 
-  # Validate ecosystem package in Docker environment
+  # Validate ecosystem package
   validate:
     name: Ecosystem Validation
     runs-on: ubuntu-latest
@@ -55,8 +40,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive  # Important: fetch git submodules
-      
+          submodules: recursive
+
       # Cache Cargo registry
       - name: Cache Cargo registry
         uses: actions/cache@v4
@@ -69,41 +54,13 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      # Install Solana CLI for cargo build-sbf
       - name: Install Solana CLI
-        run: |
-          sh -c "$(curl -sSfL https://release.solana.com/stable/install)"
-          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
-          solana --version
-          cargo build-sbf --version
+        run: make install-solana
 
       - name: Validate ecosystem package
-        run: |
-          echo "🔨 Building ecosystem package: ${{ needs.setup.outputs.package_name }} v${{ needs.setup.outputs.version }}"
-          cargo build --manifest-path "${{ needs.setup.outputs.manifest_path }}"
-          
-          echo "🧪 Running tests..."
-          cargo test --manifest-path "${{ needs.setup.outputs.manifest_path }}"
-          
-          echo "📎 Running clippy..."
-          cargo clippy --manifest-path "${{ needs.setup.outputs.manifest_path }}" --all-targets -- -D warnings
-          
-          echo "🔍 Validating generated ELF constants..."
-          GENERATED_LIB="ecosystem/${{ needs.setup.outputs.ecosystem_name }}/src/lib.rs"
-          if [ ! -f "$GENERATED_LIB" ]; then
-            echo "❌ Generated lib.rs not found"
-            exit 1
-          fi
-          
-          if ! grep -q "pub const.*_ELF: &\[u8\]" "$GENERATED_LIB"; then
-            echo "❌ No ELF constants found in generated code"
-            exit 1
-          fi
-          
-          echo "✅ ELF constants validation passed"
-          
-          echo "📦 Publish dry run..."
-          cargo publish --manifest-path "${{ needs.setup.outputs.manifest_path }}" --dry-run
+        run: make validate-ecosystem-package MANIFEST_PATH="${{ needs.setup.outputs.manifest_path }}" VERSION="${{ needs.setup.outputs.version }}"
+        env:
+          PATH: ${{ env.PATH }}:$HOME/.local/share/solana/install/active_release/bin
 
   # Publish to crates.io
   publish:
@@ -118,24 +75,14 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      # Install Solana CLI for cargo build-sbf
       - name: Install Solana CLI
-        run: |
-          sh -c "$(curl -sSfL https://release.solana.com/stable/install)"
-          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
-          solana --version
-          cargo build-sbf --version
+        run: make install-solana
 
-      - name: Build ecosystem package
-        run: |
-          echo "🔨 Building ${{ needs.setup.outputs.package_name }} v${{ needs.setup.outputs.version }} for publication..."
-          cargo build --manifest-path "${{ needs.setup.outputs.manifest_path }}"
-
-      - name: Publish to crates.io
-        run: |
-          echo "📦 Publishing ${{ needs.setup.outputs.package_name }} v${{ needs.setup.outputs.version }} to crates.io..."
-          cargo publish --manifest-path "${{ needs.setup.outputs.manifest_path }}" --token "${{ secrets.CARGO_REGISTRY_TOKEN }}"
-          echo "✅ Published to crates.io!"
+      - name: Publish ecosystem package
+        run: make publish-ecosystem-package MANIFEST_PATH="${{ needs.setup.outputs.manifest_path }}"
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          PATH: ${{ env.PATH }}:$HOME/.local/share/solana/install/active_release/bin
 
   # Create GitHub release
   github-release:
@@ -149,45 +96,10 @@ jobs:
       
       - name: Create GitHub Release
         run: |
-          ECOSYSTEM_NAME="${{ needs.setup.outputs.ecosystem_name }}"
-          PACKAGE_NAME="${{ needs.setup.outputs.package_name }}"
-          VERSION="${{ needs.setup.outputs.version }}"
-          
-          # Create release notes
-          cat > release_notes.md << EOF
-          # $PACKAGE_NAME v$VERSION
-          
-          Pre-built ELF exports for ${ECOSYSTEM_NAME} v${VERSION}.
-          
-          ## Installation
-          
-          \`\`\`toml
-          [dependencies]
-          $PACKAGE_NAME = "$VERSION"
-          \`\`\`
-          
-          ## Usage
-          
-          \`\`\`rust
-          use ${PACKAGE_NAME}::*;
-          
-          // Use the ELF constants directly
-          let program_id = deploy_program(PROGRAM_ELF)?;
-          \`\`\`
-          
-          ## What's Included
-          
-          This ecosystem package contains pre-built ELF binaries for ${ECOSYSTEM_NAME} v${VERSION}, matching the exact upstream release.
-          
-          - 🔒 **Version-locked** to upstream v${VERSION}
-          - 🚀 **Zero build time** - pre-compiled binaries
-          - ✅ **Validated** in CI with comprehensive testing
-          
-          See the [ecosystem documentation](https://github.com/levicook/elf-magic/blob/main/docs/ecosystem.md) for more details.
-          EOF
-          
-          gh release create "${{ github.ref_name }}" \
-            --title "$PACKAGE_NAME v$VERSION" \
-            --notes-file release_notes.md
+          make create-ecosystem-github-release \
+            ECOSYSTEM_NAME="${{ needs.setup.outputs.ecosystem_name }}" \
+            PACKAGE_NAME="${{ needs.setup.outputs.package_name }}" \
+            VERSION="${{ needs.setup.outputs.version }}" \
+            TAG="${GITHUB_REF#refs/tags/}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

@@ -1,0 +1,22 @@
+#!/bin/bash
+set -euo pipefail
+
+# Install Solana CLI for cargo build-sbf
+echo "🔧 Installing Solana CLI..."
+
+if command -v solana >/dev/null 2>&1; then
+    echo "✅ Solana CLI already installed:"
+    solana --version
+    cargo build-sbf --version
+    exit 0
+fi
+
+# Install Solana CLI
+sh -c "$(curl -sSfL https://release.solana.com/stable/install)"
+
+# Add to PATH for current session
+export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+
+echo "✅ Solana CLI installed:"
+solana --version
+cargo build-sbf --version 
