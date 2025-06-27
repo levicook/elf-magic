@@ -1,0 +1,3 @@
+# .ignore file for odo (and ripgrep/ag tools)
+# Prevent odo from modifying ecosystem submodule contents
+ecosystem/*/upstream/* 

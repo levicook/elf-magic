@@ -136,9 +136,17 @@ A: Automated release process tracks upstream git tags and rebuilds when new vers
 
 ## Roadmap
 
-**Coming soon:**
+**Available now:**
+- ✅ SPL Token (Original)
+- ✅ SPL Token 2022 
+- ✅ SPL Associated Token Account
+- ✅ Solana Memo
+- ✅ Solana Stake
 
-- SPL Associated Token program
+**Coming soon:**
+- System Program
+- Stake Pool Program  
+- Address Lookup Table Program
 - Metaplex programs
 - Pyth Oracle programs
 - Your suggestions! (Open an issue)
@@ -172,33 +180,15 @@ Ecosystem packages use a **maintainer-controlled + GitHub validation** workflow:
 
 Example: Releasing `solana-spl-token` version `3.5.0`
 
-1. **Update submodule to target version**:
+1. **Sync submodule and update version**:
 
    ```bash
-   cd ecosystem/solana-spl-token/upstream
-   git fetch --tags
-   git checkout v3.5.0
-   
-   # Verify you're on the exact tag
-   git describe --exact-match --tags
-   # Should output: v3.5.0
-   
-   # Ensure no uncommitted changes in submodule
-   git status --porcelain
-   # Should be empty
-   
-   cd ../../..
+   ./scripts/sync-ecosystem-package solana-spl-token 3.5.0
    ```
 
-2. **Update package version**:
+   This cleans the submodule state, checks out the exact upstream tag, and updates the package version.
 
-   ```bash
-   # Edit ecosystem/solana-spl-token/Cargo.toml
-   version = "3.5.0"
-   description = "Pre-built ELF exports for Solana SPL Token program v3.5.0"
-   ```
-
-3. **Generate and review the exported constants**:
+2. **Generate and review the exported constants**:
 
    ```bash
    cd ecosystem/solana-spl-token
@@ -206,10 +196,10 @@ Example: Releasing `solana-spl-token` version `3.5.0`
    # Review generated src/lib.rs - verify expected ELF constants are exported
    ```
 
-4. **Write validation tests** (required):
+3. **Write validation tests** (required):
 
    ```rust
-   // Create tests/integration.rs - validation will fail without tests
+   // Create/update tests/integration.rs - validation will fail without tests
    use elf_magic_solana_spl_token::*;
 
    #[test]
@@ -221,24 +211,29 @@ Example: Releasing `solana-spl-token` version `3.5.0`
    }
    ```
 
-5. **Validate the package**:
+4. **Test the package locally**:
 
    ```bash
-   make validate-ecosystem-package MANIFEST_PATH=ecosystem/solana-spl-token/Cargo.toml
+   # Build and test to verify basic functionality
+   cargo build --package elf-magic-solana-spl-token
+   cargo test --package elf-magic-solana-spl-token
+
+   # Full validation (including publish dry run) happens in CI
    ```
 
-6. **Commit, tag, and push**:
+5. **Commit, tag, and push**:
+
    ```bash
    # Stage the submodule commit hash first
    git add ecosystem/solana-spl-token/upstream
-   
+
    # Stage other changes
    git add ecosystem/solana-spl-token/Cargo.toml ecosystem/solana-spl-token/tests/
-   
+
    # Verify what you're committing
    git status
    git diff --cached
-   
+
    git commit -m "Release elf-magic-solana-spl-token v3.5.0"
    git tag ecosystem/solana-spl-token/v3.5.0
    git push origin main ecosystem/solana-spl-token/v3.5.0
@@ -251,7 +246,8 @@ CI will validate, publish to crates.io, and create a GitHub release.
 1. **Create package structure:**
 
 ```bash
-mkdir -p ecosystem/your-program-name
+mkdir -p ecosystem/your-program-name/src
+touch ecosystem/your-program-name/src/lib.rs
 ```
 
 2. **Add git submodule:**
@@ -260,7 +256,17 @@ mkdir -p ecosystem/your-program-name
 git submodule add https://github.com/upstream/repo ecosystem/your-program-name/upstream
 ```
 
-3. **Create Cargo.toml** with elf-magic configuration:
+3. **Explore the upstream programs:**
+
+```bash
+# Find Solana programs (packages with "cdylib" crate type)
+cargo metadata --no-deps --manifest-path ./ecosystem/your-program-name/upstream/Cargo.toml --format-version 1 | jq '.packages[] | select(.targets[0].crate_types[] == "cdylib") | {name: .name, version: .version, crate_types: .targets[0].crate_types}'
+
+# Note: Some repositories may have duplicate program names across different packages.
+# In this case, you'll need to use path-based discovery and override constants.
+```
+
+4. **Create Cargo.toml** with elf-magic configuration (replace the target names):
 
 ```toml
 [package]
@@ -270,35 +276,59 @@ edition = "2021"
 description = "Pre-built ELF exports for Your Program v1.0.0"
 license = "MIT"
 
-[dependencies]
-elf-magic = { path = "../.." }
-
 [package.metadata.elf-magic]
 mode = "laser-eyes"
 workspaces = [
+    # Simple case: use target names
     { manifest_path = "./upstream/Cargo.toml", only = ["target:your_program"] },
+
+    # Complex case: use path patterns for repositories with duplicate targets
+    # { manifest_path = "./upstream/Cargo.toml", only = ["path:*/program/*", "path:*/other-program/*"] },
 ]
+
+# For complex cases with duplicates, override constant names
+# [package.metadata.elf-magic.constants]
+# "./upstream/program/Cargo.toml" = "YOUR_MAIN_PROGRAM_ELF"
+# "./upstream/other-program/Cargo.toml" = "YOUR_OTHER_PROGRAM_ELF"
 
 [build-dependencies]
-elf-magic = { path = "../.." }
+elf-magic = { version = "0.3.1" }
 ```
 
-4. **Test the release process:**
+5. **Create supporting files:**
 
 ```bash
-make prepare-ecosystem-release ECOSYSTEM=your-program-name VERSION=1.0.0
-git push origin main ecosystem/your-program-name/v1.0.0
+# Create build.rs to invoke elf-magic
+cat > ecosystem/your-program-name/build.rs << 'EOF'
+fn main() {
+    elf_magic::generate().unwrap();
+}
+EOF
+
+# Write failing tests to define expectations based on step 3 research
+cat > ecosystem/your-program-name/tests/integration.rs << 'EOF'
+use elf_magic_your_program_name::*;
+
+#[test]
+fn validate_elf_constants() {
+    // TODO: Replace with actual expected constants from step 3
+    // assert!(!YOUR_PROGRAM_ELF.is_empty());
+    // assert_eq!(&YOUR_PROGRAM_ELF[0..4], b"\x7fELF");
+}
+EOF
 ```
 
-5. **Add to workspace** in root `Cargo.toml`:
+6. **Test the package:**
 
-```toml
-[workspace]
-members = [
-    ".",
-    "ecosystem/solana-spl-token",
-    "ecosystem/your-program-name",  # Add here
-]
+```bash
+# Build to verify configuration works
+cargo build --package elf-magic-your-program-name
+
+# Run tests to verify ELF constants are valid
+cargo test --package elf-magic-your-program-name
+
+# Note: Full validation (including publish dry run) happens in CI
+# where git submodules are properly checked out
 ```
 
 ### Contributing
@@ -311,3 +341,8 @@ We welcome ecosystem packages for popular Solana programs! Open an issue or PR t
 - Program has stable, tagged releases
 - Program builds successfully with `cargo build-sbf`
 - Upstream repository is well-maintained
+
+**Common challenges:**
+
+- **Duplicate targets**: Some repositories contain multiple programs with the same name. Use path-based discovery (`path:*/program/*`) and override constants. See the [elf-magic configuration docs](../README.md) for details.
+- **Native programs**: Some repositories contain only client code for native/system programs (like compute-budget). These can't be built with `cargo build-sbf`.

@@ -1,7 +1,7 @@
 [workspace]
 members = [ #
     ".",
-    "ecosystem/solana-spl-token",
+    "ecosystem/*",
 ]
 
 [package]

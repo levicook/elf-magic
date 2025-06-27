@@ -8,6 +8,34 @@
 
 Stop wrestling with Solana program builds. `elf-magic` automatically discovers all your programs, builds them, and generates clean Rust code so your ELF bytes are always available as constants.
 
+## Ecosystem Packages 🌟
+
+**NEW**: Pre-built ELF exports for popular Solana programs. Zero build time, just add the dependency.
+
+| Program              | Package                                     | Version | What's Included                  |
+| -------------------- | ------------------------------------------- | ------- | -------------------------------- |
+| SPL Token            | `elf-magic-solana-spl-token`                | `3.4.0` | Standard + Pinocchio optimized   |
+| SPL Token 2022       | `elf-magic-solana-token-2022`               | `9.0.0` | Token 2022 + ElGamal Registry    |
+| SPL Associated Token | `elf-magic-solana-associated-token-account` | `7.0.0` | Associated Token Account program |
+| Solana Memo          | `elf-magic-solana-memo`                     | `6.0.0` | Memo + Pinocchio memo programs   |
+| Solana Stake         | `elf-magic-solana-stake`                    | `1.0.0` | Solana Stake program             |
+
+👉 **[Full ecosystem documentation](docs/ecosystem.md)** - Installation, usage examples, roadmap
+
+**Quick ecosystem example:**
+
+```toml
+[dependencies]
+elf-magic-solana-spl-token = "3.4.0"
+```
+
+```rust
+use elf_magic_solana_spl_token::SPL_TOKEN_PROGRAM_ELF;
+
+// Deploy, test, embed - ready to use!
+let program_id = deploy_program(SPL_TOKEN_PROGRAM_ELF)?;
+```
+
 ## Quick Start
 
 ```bash
@@ -57,16 +85,6 @@ use my_elves::{TOKEN_MANAGER_ELF, GOVERNANCE_ELF};
 // Deploy, test, embed - whatever you need
 let program_id = deploy_program(TOKEN_MANAGER_ELF)?;
 ```
-
-## Ecosystem Packages 🌟
-
-**NEW**: Pre-built ELF exports for popular Solana programs. Zero build time, just add the dependency.
-
-| Program | Package | Version | What's Included |
-|---------|---------|---------|-----------------|
-| SPL Token | `elf-magic-solana-spl-token` | `3.4.0` | Standard + Pinocchio optimized |
-
-👉 **[Full ecosystem documentation](docs/ecosystem.md)** - Installation, usage examples, roadmap
 
 ## Three Modes for Every Workflow
 

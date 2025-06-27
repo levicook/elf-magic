@@ -1,0 +1,27 @@
+[package]
+name = "elf-magic-solana-associated-token-account"
+version = "7.0.0"
+edition = "2021"
+description = "Pre-built ELF exports for Solana Associated Token Account program v7.0.0"
+license = "MIT"
+repository = "https://github.com/levicook/elf-magic"
+keywords = ["solana", "spl", "associated-token-account", "elf", "ecosystem"]
+
+[package.metadata.elf-magic]
+mode = "laser-eyes"
+workspaces = [
+    { manifest_path = "./upstream/Cargo.toml", only = [
+        "path:*/program/*",
+    ] },
+]
+
+[package.metadata.upstream]
+repository = "https://github.com/solana-program/associated-token-account"
+mainnet_version = "7.0.0"
+program_id = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+
+[lib]
+path = "src/lib.rs"
+
+[build-dependencies]
+elf-magic = { version = "0.3.1" }

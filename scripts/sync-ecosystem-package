@@ -1,0 +1,103 @@
+#!/bin/bash
+set -euo pipefail
+
+# Sync ecosystem package with upstream repository
+# Usage: ./scripts/sync-ecosystem-package <ecosystem_name> <version>
+# Example: ./scripts/sync-ecosystem-package solana-spl-token 3.5.0
+
+if [ $# -ne 2 ]; then
+    echo "Usage: $0 <ecosystem_name> <version>" >&2
+    echo "Example: $0 solana-spl-token 3.5.0" >&2
+    echo "" >&2
+    echo "STRICT MODE: Version must be explicitly specified." >&2
+    echo "No auto-discovery or fallbacks." >&2
+    exit 1
+fi
+
+ECOSYSTEM_NAME="$1"
+TARGET_VERSION="$2"
+ECOSYSTEM_PATH="ecosystem/$ECOSYSTEM_NAME"
+UPSTREAM_PATH="$ECOSYSTEM_PATH/upstream"
+CARGO_TOML="$ECOSYSTEM_PATH/Cargo.toml"
+
+if [ ! -d "$ECOSYSTEM_PATH" ]; then
+    echo "❌ Ecosystem package not found: $ECOSYSTEM_PATH" >&2
+    exit 1
+fi
+
+# Validate version format (semantic versioning)
+if ! echo "$TARGET_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+    echo "❌ Invalid version format: $TARGET_VERSION" >&2
+    echo "Expected format: X.Y.Z (e.g., 3.4.0)" >&2
+    exit 1
+fi
+
+echo "🔄 Syncing ecosystem package: $ECOSYSTEM_NAME"
+
+echo "🎯 Target version: $TARGET_VERSION"
+
+# Clean the submodule state
+echo "🧹 Cleaning submodule state..."
+cd "$UPSTREAM_PATH"
+
+# Reset any local changes that might make it dirty
+git reset --hard HEAD
+git clean -fd
+
+# Fetch and checkout target version - STRICT MODE
+git fetch --tags --quiet
+
+# Try v-prefixed tag first (most common)
+if git rev-parse "v$TARGET_VERSION" >/dev/null 2>&1; then
+    TAG_NAME="v$TARGET_VERSION"
+elif git rev-parse "$TARGET_VERSION" >/dev/null 2>&1; then
+    TAG_NAME="$TARGET_VERSION"
+else
+    echo "❌ Version $TARGET_VERSION not found in upstream repository" >&2
+    echo "Available versions:" >&2
+    git tag --sort=-version:refname | head -10 >&2
+    exit 1
+fi
+
+# Checkout and verify we're on the exact tag
+git checkout "$TAG_NAME" --quiet
+
+# STRICT VALIDATION: Ensure we're on the exact tag, not a commit
+CURRENT_TAG=$(git describe --exact-match --tags 2>/dev/null || echo "NOT_A_TAG")
+if [ "$CURRENT_TAG" != "$TAG_NAME" ]; then
+    echo "❌ Failed to checkout exact tag. Got: $CURRENT_TAG, Expected: $TAG_NAME" >&2
+    exit 1
+fi
+
+# STRICT VALIDATION: Ensure working directory is clean
+if [ -n "$(git status --porcelain)" ]; then
+    echo "❌ Upstream repository has uncommitted changes after checkout:" >&2
+    git status --porcelain >&2
+    echo "This indicates the upstream tag is dirty or has local modifications." >&2
+    exit 1
+fi
+
+echo "✅ Checked out clean tag: $TAG_NAME"
+
+cd - > /dev/null
+
+# Update Cargo.toml version
+echo "📝 Updating package version in Cargo.toml..."
+if command -v sed >/dev/null 2>&1; then
+    # macOS-compatible sed
+    sed -i '' "s/^version = \".*\"/version = \"$TARGET_VERSION\"/" "$CARGO_TOML"
+    sed -i '' "s/Pre-built ELF exports for .* v[0-9]\+\.[0-9]\+\.[0-9]\+/Pre-built ELF exports for $(echo $ECOSYSTEM_NAME | sed 's/-/ /g') v$TARGET_VERSION/" "$CARGO_TOML"
+else
+    # Linux sed
+    sed -i "s/^version = \".*\"/version = \"$TARGET_VERSION\"/" "$CARGO_TOML"
+    sed -i "s/Pre-built ELF exports for .* v[0-9]\+\.[0-9]\+\.[0-9]\+/Pre-built ELF exports for $(echo $ECOSYSTEM_NAME | sed 's/-/ /g') v$TARGET_VERSION/" "$CARGO_TOML"
+fi
+
+echo "✅ Submodule synced to v$TARGET_VERSION"
+echo ""
+echo "Next steps:"
+echo "  1. Review changes: git diff HEAD"
+echo "  2. Validate: make validate-ecosystem-package MANIFEST_PATH=$CARGO_TOML"
+echo "  3. Commit: git add . && git commit -m 'ecosystem: bump $ECOSYSTEM_NAME to v$TARGET_VERSION'"
+echo "  4. Tag: git tag ecosystem/$ECOSYSTEM_NAME/v$TARGET_VERSION"
+echo "  5. Push: git push origin main --tags" 

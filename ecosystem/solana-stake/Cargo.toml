@@ -1,0 +1,17 @@
+[package]
+name = "elf-magic-solana-stake"
+version = "1.0.0"
+edition = "2021"
+description = "Pre-built ELF exports for Solana Stake Program v1.0.0"
+license = "MIT"
+
+[package.metadata.elf-magic]
+mode = "laser-eyes"
+workspaces = [
+    { manifest_path = "./upstream/Cargo.toml", only = [
+        "target:solana_stake_program",
+    ] },
+]
+
+[build-dependencies]
+elf-magic = { version = "0.3.1" }

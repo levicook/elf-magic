@@ -1,0 +1,22 @@
+[package]
+name = "elf-magic-solana-token-2022"
+version = "9.0.0"
+edition = "2021"
+description = "Pre-built ELF exports for SPL Token 2022 v9.0.0"
+license = "MIT"
+
+[package.metadata.elf-magic]
+mode = "laser-eyes"
+workspaces = [
+    { manifest_path = "./upstream/Cargo.toml", only = [
+        "path:*/program/*",
+        "path:*/elgamal-registry/*",
+    ] },
+]
+
+[package.metadata.elf-magic.constants]
+"./upstream/program/Cargo.toml" = "SPL_TOKEN_2022_ELF"
+"./upstream/elgamal-registry/Cargo.toml" = "SPL_ELGAMAL_REGISTRY_ELF"
+
+[build-dependencies]
+elf-magic = { version = "0.3.1" }

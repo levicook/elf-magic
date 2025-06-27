@@ -1,0 +1,18 @@
+[package]
+name = "elf-magic-solana-memo"
+version = "6.0.0"
+edition = "2021"
+description = "Pre-built ELF exports for Solana Memo Program v6.0.0"
+license = "MIT"
+
+[package.metadata.elf-magic]
+mode = "laser-eyes"
+workspaces = [
+    { manifest_path = "./upstream/Cargo.toml", only = [
+        "target:spl_memo",
+        "target:p_memo",
+    ] },
+]
+
+[build-dependencies]
+elf-magic = { version = "0.3.1" }
