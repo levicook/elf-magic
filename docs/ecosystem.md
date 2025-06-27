@@ -292,7 +292,7 @@ workspaces = [
 # "./upstream/other-program/Cargo.toml" = "YOUR_OTHER_PROGRAM_ELF"
 
 [build-dependencies]
-elf-magic = { version = "0.3.1" }
+elf-magic = { version = "0.4" }
 ```
 
 5. **Create supporting files:**

@@ -14,4 +14,4 @@ workspaces = [
 ]
 
 [build-dependencies]
-elf-magic = { path = "../.." }
+elf-magic = { version = "0.4" }
