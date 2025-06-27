@@ -40,13 +40,13 @@ publish:
 # Dogfooding - Use our own tool for releases! 🎯
 .PHONY: release-patch release-minor release-major
 release-patch:
-	@./scripts/release.sh patch
+	@./scripts/release patch
 
 release-minor:
-	@./scripts/release.sh minor
+	@./scripts/release minor
 
 release-major:
-	@./scripts/release.sh major
+	@./scripts/release major
 
 # Ecosystem package releases (maintainer-controlled + GitHub validation)
 .PHONY: ecosystem-list validate-ecosystem-package publish-ecosystem-package parse-ecosystem-tag install-solana create-ecosystem-github-release
