@@ -139,7 +139,7 @@ dependencies = [
 
 [[package]]
 name = "elf-magic"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "cargo_metadata",

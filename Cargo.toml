@@ -6,7 +6,7 @@ members = [ #
 
 [package]
 name = "elf-magic"
-version = "0.3.1"
+version = "0.4.0"
 edition = "2021"
 description = "Automatic compile-time ELF exports for Solana programs. One-liner integration, zero config, just works. ✨"
 license = "MIT"
