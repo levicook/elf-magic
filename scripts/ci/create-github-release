@@ -1,0 +1,61 @@
+#!/bin/bash
+set -euo pipefail
+
+# Create GitHub release for ecosystem package
+# Usage: ./scripts/create-ecosystem-release.sh <ecosystem_name> <package_name> <version> <tag>
+
+if [ $# -ne 4 ]; then
+    echo "Usage: $0 <ecosystem_name> <package_name> <version> <tag>" >&2
+    echo "Example: $0 solana-spl-token elf-magic-solana-spl-token 3.4.0 ecosystem/solana-spl-token/v3.4.0" >&2
+    exit 1
+fi
+
+ECOSYSTEM_NAME="$1"
+PACKAGE_NAME="$2"
+VERSION="$3"
+TAG="$4"
+
+echo "🚀 Creating GitHub release for $PACKAGE_NAME v$VERSION..."
+
+# Create release notes
+cat > release_notes.md << EOF
+# $PACKAGE_NAME v$VERSION
+
+Pre-built ELF exports for ${ECOSYSTEM_NAME} v${VERSION}.
+
+## Installation
+
+\`\`\`toml
+[dependencies]
+$PACKAGE_NAME = "$VERSION"
+\`\`\`
+
+## Usage
+
+\`\`\`rust
+use ${PACKAGE_NAME}::*;
+
+// Use the ELF constants directly
+let program_id = deploy_program(PROGRAM_ELF)?;
+\`\`\`
+
+## What's Included
+
+This ecosystem package contains pre-built ELF binaries for ${ECOSYSTEM_NAME} v${VERSION}, matching the exact upstream release.
+
+- 🔒 **Version-locked** to upstream v${VERSION}
+- 🚀 **Zero build time** - pre-compiled binaries
+- ✅ **Validated** in CI with comprehensive testing
+
+See the [ecosystem documentation](https://github.com/levicook/elf-magic/blob/main/docs/ecosystem.md) for more details.
+EOF
+
+echo "📝 Generated release notes:"
+cat release_notes.md
+
+echo "🎯 Creating GitHub release..."
+gh release create "$TAG" \
+    --title "$PACKAGE_NAME v$VERSION" \
+    --notes-file release_notes.md
+
+echo "✅ GitHub release created for $TAG" 

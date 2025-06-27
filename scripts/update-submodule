@@ -1,0 +1,39 @@
+#!/bin/bash
+set -euo pipefail
+
+# Update git submodule to specific version
+# Usage: ./scripts/update-submodule <submodule_path> <version>
+
+if [ $# -ne 2 ]; then
+    echo "Usage: $0 <submodule_path> <version>" >&2
+    echo "Example: $0 ecosystem/solana-spl-token/upstream 3.4.0" >&2
+    exit 1
+fi
+
+SUBMODULE_PATH="$1"
+VERSION="$2"
+
+if [ ! -d "$SUBMODULE_PATH" ]; then
+    echo "❌ Submodule not found: $SUBMODULE_PATH" >&2
+    exit 1
+fi
+
+echo "📎 Updating submodule $SUBMODULE_PATH to v$VERSION..."
+
+cd "$SUBMODULE_PATH"
+
+# Fetch latest tags
+git fetch --tags
+
+# Check if the tag exists
+if ! git rev-parse "v$VERSION" >/dev/null 2>&1; then
+    echo "❌ Tag v$VERSION not found in submodule repository" >&2
+    echo "Available tags:" >&2
+    git tag --sort=-version:refname | head -10 >&2
+    exit 1
+fi
+
+# Checkout the specific version
+git checkout "v$VERSION"
+
+echo "✅ Submodule updated to v$VERSION"

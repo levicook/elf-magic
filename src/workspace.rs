@@ -1,19 +1,30 @@
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
+
 use cargo_metadata::{CrateType, Metadata, MetadataCommand};
 
 use crate::{
-    config::Config,
+    config::{resolve_constants_paths, resolve_targets_paths, Config},
     error::Error,
     programs::{DiscoveredPrograms, SolanaProgram},
 };
 
 /// Load workspaces from config
-pub fn load_workspaces(config: &Config) -> Result<Vec<Workspace>, Error> {
+pub fn load_workspaces(config_file_dir: &Path, config: &Config) -> Result<Vec<Workspace>, Error> {
+    // Get resolved overrides from config
+    let resolved_constants = resolve_constants_paths(&config.constants(), config_file_dir);
+    let resolved_targets = resolve_targets_paths(&config.targets(), config_file_dir);
+
     match config {
-        Config::LaserEyes { workspaces } => {
+        Config::LaserEyes { workspaces, .. } => {
             let mut results = Vec::new();
             for workspace in workspaces {
                 let metadata = MetadataCommand::new()
                     .manifest_path(&workspace.manifest_path)
+                    .no_deps()
+                    .other_options(vec!["--locked".to_string()])
                     .exec()?;
 
                 let manifest_path = workspace.manifest_path.clone();
@@ -22,12 +33,17 @@ pub fn load_workspaces(config: &Config) -> Result<Vec<Workspace>, Error> {
                     metadata,
                     manifest_path,
                     filter_mode: FilterMode::Only(workspace.only.clone()),
+                    constants_overrides: resolved_constants.clone(),
+                    targets_overrides: resolved_targets.clone(),
                 });
             }
             Ok(results)
         }
         Config::Magic => {
-            let metadata = MetadataCommand::new().exec()?;
+            let metadata = MetadataCommand::new()
+                .no_deps()
+                .other_options(vec!["--locked".to_string()])
+                .exec()?;
 
             let manifest_path = metadata
                 .workspace_root
@@ -40,16 +56,21 @@ pub fn load_workspaces(config: &Config) -> Result<Vec<Workspace>, Error> {
                 metadata,
                 manifest_path,
                 filter_mode: FilterMode::Magic,
+                constants_overrides: resolved_constants,
+                targets_overrides: resolved_targets,
             }])
         }
         Config::Permissive {
             workspaces,
             global_deny,
+            ..
         } => {
             let mut results = Vec::new();
             for workspace in workspaces {
                 let metadata = MetadataCommand::new()
                     .manifest_path(&workspace.manifest_path)
+                    .no_deps()
+                    .other_options(vec!["--locked".to_string()])
                     .exec()?;
 
                 let manifest_path = workspace.manifest_path.clone();
@@ -62,6 +83,8 @@ pub fn load_workspaces(config: &Config) -> Result<Vec<Workspace>, Error> {
                     metadata,
                     manifest_path,
                     filter_mode: FilterMode::Deny(merged_denies),
+                    constants_overrides: resolved_constants.clone(),
+                    targets_overrides: resolved_targets.clone(),
                 });
             }
             Ok(results)
@@ -85,6 +108,8 @@ pub struct Workspace {
     pub metadata: Metadata,
     pub manifest_path: String,
     pub filter_mode: FilterMode,
+    pub constants_overrides: HashMap<PathBuf, String>,
+    pub targets_overrides: HashMap<PathBuf, String>,
 }
 
 impl Workspace {
@@ -100,12 +125,26 @@ impl Workspace {
                     continue;
                 }
 
+                let manifest_path = package.manifest_path.as_std_path().to_path_buf();
+                let base_target_name = target.name.to_string();
+
+                // Create fully resolved program upfront
                 let program = SolanaProgram {
                     package_name: package.name.to_string(),
-                    target_name: target.name.to_string(),
-                    manifest_path: package.manifest_path.as_std_path().to_path_buf(),
+                    target_name: resolve_target_name(
+                        &base_target_name,
+                        &manifest_path,
+                        &self.targets_overrides,
+                    ),
+                    manifest_path: manifest_path.clone(),
+                    constant_name: resolve_constant_name(
+                        &base_target_name,
+                        &manifest_path,
+                        &self.constants_overrides,
+                    ),
                 };
 
+                // Now filter the fully resolved program
                 match &self.filter_mode {
                     FilterMode::Magic => {
                         // Magic mode: include all programs
@@ -140,6 +179,30 @@ impl Workspace {
             excluded,
         })
     }
+}
+
+/// Resolve target name using overrides
+fn resolve_target_name(
+    base_target_name: &str,
+    manifest_path: &Path,
+    targets_overrides: &HashMap<PathBuf, String>,
+) -> String {
+    targets_overrides
+        .get(manifest_path)
+        .cloned()
+        .unwrap_or_else(|| base_target_name.to_string())
+}
+
+/// Resolve constant name using overrides
+fn resolve_constant_name(
+    base_target_name: &str,
+    manifest_path: &Path,
+    constants_overrides: &HashMap<PathBuf, String>,
+) -> String {
+    constants_overrides
+        .get(manifest_path)
+        .cloned()
+        .unwrap_or_else(|| format!("{}_ELF", base_target_name.to_uppercase()))
 }
 
 /// Check if a program should be included in laser-eyes mode (matches only patterns)
@@ -189,6 +252,7 @@ mod tests {
             target_name: target_name.to_string(),
             package_name: package_name.to_string(),
             manifest_path: PathBuf::from("/workspace/Cargo.toml"),
+            constant_name: format!("{}_ELF", target_name.to_uppercase()),
         }
     }
 
@@ -238,6 +302,7 @@ mod tests {
             target_name: "my_target".to_string(),
             package_name: "my_package".to_string(),
             manifest_path: PathBuf::from("/workspace/examples/test/Cargo.toml"),
+            constant_name: "MY_TARGET_ELF".to_string(),
         };
         let deny_patterns = vec!["path:*/examples/*".to_string()];
 
@@ -250,6 +315,7 @@ mod tests {
             target_name: "my_target".to_string(),
             package_name: "my_package".to_string(),
             manifest_path: PathBuf::from("/workspace/src/Cargo.toml"),
+            constant_name: "MY_TARGET_ELF".to_string(),
         };
         let deny_patterns = vec!["path:*/examples/*".to_string()];
 
@@ -297,6 +363,7 @@ mod tests {
             target_name: "my_target".to_string(),
             package_name: "my_package".to_string(),
             manifest_path: PathBuf::from("/workspace/examples/basic/Cargo.toml"),
+            constant_name: "MY_TARGET_ELF".to_string(),
         };
 
         assert!(matches_program_pattern(&program, "path:*/examples/*"));
@@ -437,6 +504,7 @@ mod tests {
             target_name: "my_target".to_string(),
             package_name: "my_package".to_string(),
             manifest_path: PathBuf::from("/workspace/programs/core/Cargo.toml"),
+            constant_name: "MY_TARGET_ELF".to_string(),
         };
         let only_patterns = vec!["path:*/programs/core/*".to_string()];
 

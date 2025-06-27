@@ -1,0 +1,105 @@
+name: Ecosystem Release
+
+on:
+  push:
+    tags:
+      - "ecosystem/*/v*.*.*" # ecosystem/solana-spl-token/v3.4.0
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Extract ecosystem info from tag
+  setup:
+    name: Setup Release Info
+    runs-on: ubuntu-latest
+    outputs:
+      ecosystem_name: ${{ steps.parse.outputs.ecosystem_name }}
+      package_name: ${{ steps.parse.outputs.package_name }}
+      version: ${{ steps.parse.outputs.version }}
+      manifest_path: ${{ steps.parse.outputs.manifest_path }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse ecosystem tag
+        id: parse
+        run: |
+          # Use make to parse the tag
+          eval $(make parse-ecosystem-tag TAG="${GITHUB_REF#refs/tags/}")
+          
+          # Set GitHub outputs
+          echo "ecosystem_name=$ECOSYSTEM_NAME" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+          echo "manifest_path=$MANIFEST_PATH" >> $GITHUB_OUTPUT
+
+  # Validate ecosystem package
+  validate:
+    name: Ecosystem Validation
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # Cache Cargo registry
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Solana CLI
+        run: make install-solana
+
+      - name: Validate ecosystem package
+        run: make validate-ecosystem-package MANIFEST_PATH="${{ needs.setup.outputs.manifest_path }}" VERSION="${{ needs.setup.outputs.version }}"
+        env:
+          PATH: ${{ env.PATH }}:$HOME/.local/share/solana/install/active_release/bin
+
+  # Publish to crates.io
+  publish:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    needs: [setup, validate]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Solana CLI
+        run: make install-solana
+
+      - name: Publish ecosystem package
+        run: make publish-ecosystem-package MANIFEST_PATH="${{ needs.setup.outputs.manifest_path }}"
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          PATH: ${{ env.PATH }}:$HOME/.local/share/solana/install/active_release/bin
+
+  # Create GitHub release
+  github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [setup, publish]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Create GitHub Release
+        run: |
+          make create-ecosystem-github-release \
+            ECOSYSTEM_NAME="${{ needs.setup.outputs.ecosystem_name }}" \
+            PACKAGE_NAME="${{ needs.setup.outputs.package_name }}" \
+            VERSION="${{ needs.setup.outputs.version }}" \
+            TAG="${GITHUB_REF#refs/tags/}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

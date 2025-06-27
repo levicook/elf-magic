@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use crate::{
@@ -97,6 +97,21 @@ pub fn build_program(program: &SolanaProgram) -> Result<PathBuf, Error> {
     Ok(program_so_path)
 }
 
+/// Enable incremental builds for each program
+pub fn enable_incremental_builds(
+    manifest_dir: &Path,
+    programs: &[SolanaProgram],
+) -> Result<(), Error> {
+    let output_path = manifest_dir.join("src").join("lib.rs");
+    println!("cargo:rerun-if-changed={}", output_path.display());
+
+    for program in programs {
+        let program_root = program.manifest_path.parent().unwrap();
+        println!("cargo:rerun-if-changed={}", program_root.display());
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -107,6 +122,7 @@ mod tests {
             package_name: "test_package".to_string(),
             target_name: "test_target".to_string(),
             manifest_path: PathBuf::from("/workspace/Cargo.toml"),
+            constant_name: "TEST_TARGET_ELF".to_string(),
         }
     }
 
@@ -154,11 +170,13 @@ mod tests {
                 package_name: "pkg1".to_string(),
                 target_name: "target1".to_string(),
                 manifest_path: PathBuf::from("/workspace/Cargo.toml"),
+                constant_name: "TARGET1_ELF".to_string(),
             },
             SolanaProgram {
                 package_name: "pkg2".to_string(),
                 target_name: "target2".to_string(),
                 manifest_path: PathBuf::from("/workspace/Cargo.toml"),
+                constant_name: "TARGET2_ELF".to_string(),
             },
         ];
 
@@ -193,6 +211,7 @@ mod tests {
                 package_name: "my_package".to_string(),
                 target_name: "my-complex-target-name".to_string(),
                 manifest_path: PathBuf::from("/workspace/Cargo.toml"),
+                constant_name: "MY_COMPLEX_TARGET_NAME_ELF".to_string(),
             },
         ];
 

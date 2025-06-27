@@ -37,7 +37,7 @@ edition = "2021"
     let config = Config::load(temp_dir.path()).unwrap();
 
     match config {
-        Config::LaserEyes { workspaces } => {
+        Config::LaserEyes { workspaces, .. } => {
             assert_eq!(workspaces.len(), 2);
 
             // First workspace
@@ -87,7 +87,7 @@ edition = "2021"
     let config = Config::load(temp_dir.path()).unwrap();
 
     match config {
-        Config::LaserEyes { workspaces } => {
+        Config::LaserEyes { workspaces, .. } => {
             assert_eq!(workspaces.len(), 1);
             assert_eq!(workspaces[0].manifest_path, "./Cargo.toml");
             assert_eq!(workspaces[0].only, vec!["target:my_program"]);
@@ -128,7 +128,7 @@ edition = "2021"
     let config = Config::load(temp_dir.path()).unwrap();
 
     match config {
-        Config::LaserEyes { workspaces } => {
+        Config::LaserEyes { workspaces, .. } => {
             assert_eq!(workspaces.len(), 1);
             assert_eq!(workspaces[0].only.len(), 3);
             assert!(workspaces[0].only.contains(&"target:*_core".to_string()));
@@ -175,7 +175,7 @@ edition = "2021"
     let config = Config::load(temp_dir.path()).unwrap();
 
     match config {
-        Config::LaserEyes { workspaces } => {
+        Config::LaserEyes { workspaces, .. } => {
             assert_eq!(workspaces.len(), 1);
             assert_eq!(workspaces[0].only.len(), 0);
         }
