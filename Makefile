@@ -48,6 +48,27 @@ release-minor:
 release-major:
 	@./scripts/release.sh major
 
+# Ecosystem package releases (local prep + GitHub automation)
+.PHONY: prepare-ecosystem-release prep ecosystem-list
+prepare-ecosystem-release:
+	@if [ -z "$(ECOSYSTEM)" ] || [ -z "$(VERSION)" ]; then \
+		echo "❌ Usage: make prepare-ecosystem-release ECOSYSTEM=<name> VERSION=<version>"; \
+		echo "   Example: make prepare-ecosystem-release ECOSYSTEM=solana-spl-token VERSION=3.4.0"; \
+		echo ""; \
+		echo "This prepares the ecosystem package locally. Then:"; \
+		echo "  git push origin main ecosystem/<name>/v<version>"; \
+		echo "  → Triggers GitHub workflow for validation & publication"; \
+		exit 1; \
+	fi
+	@./scripts/prepare-ecosystem-release $(ECOSYSTEM) $(VERSION)
+
+# Short alias for convenience
+prep: prepare-ecosystem-release
+
+ecosystem-list:
+	@echo "📦 Available ecosystem packages:"
+	@find ecosystem -maxdepth 1 -type d -not -name ecosystem | sed 's|ecosystem/|  - |' | sort
+
 # =============================================================================
 # Testing
 # =============================================================================
@@ -111,6 +132,11 @@ help:
 	@echo "  make release-minor      Release minor version (new features)"
 	@echo "  make release-patch      Release patch version (bug fixes)"
 	@echo "  make release-validation  Complete release validation"
+	@echo ""
+	@echo "Ecosystem:"
+	@echo "  make ecosystem-list                    List available ecosystem packages"
+	@echo "  make prepare-ecosystem-release ECOSYSTEM=<name> VERSION=<version>"
+	@echo "  make prep ECOSYSTEM=<name> VERSION=<version>  (alias for prepare-ecosystem-release)"
 	@echo ""
 	@echo "Development:"
 	@echo "  make check            Check code without building"

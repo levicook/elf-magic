@@ -1,7 +1,5 @@
-use std::fmt;
-use std::path::PathBuf;
-
 use crate::error::Error;
+use std::{fmt, path::PathBuf};
 
 /// A confirmed Solana program (has crate-type = ["cdylib"])
 #[derive(Clone)]
@@ -9,6 +7,7 @@ pub struct SolanaProgram {
     pub manifest_path: PathBuf,
     pub package_name: String,
     pub target_name: String,
+    pub constant_name: String,
 }
 
 /// Result of building multiple Solana programs
@@ -40,11 +39,6 @@ impl SolanaProgram {
     pub fn env_var_name(&self) -> String {
         format!("{}_ELF_PATH", self.target_name.to_uppercase())
     }
-
-    /// Convert target name to constant name for generated code
-    pub fn constant_name(&self) -> String {
-        format!("{}_ELF", self.target_name.to_uppercase())
-    }
 }
 
 impl fmt::Debug for SolanaProgram {
@@ -53,7 +47,7 @@ impl fmt::Debug for SolanaProgram {
             .field("target_name", &self.target_name)
             .field("manifest_path", &self.manifest_path.display())
             .field("env_var_name", &self.env_var_name())
-            .field("constant_name", &self.constant_name())
+            .field("constant_name", &self.constant_name)
             .finish()
     }
 }
@@ -147,6 +141,26 @@ impl GenerationResult {
     }
 }
 
+/// Deduplicate programs by manifest_path to handle cases where multiple workspaces
+/// discover the same program (e.g., shared dependencies)
+pub fn deduplicate_programs(programs: Vec<SolanaProgram>) -> Vec<SolanaProgram> {
+    use std::collections::HashMap;
+
+    let mut seen: HashMap<PathBuf, SolanaProgram> = HashMap::new();
+
+    for program in programs {
+        // Use manifest_path as the key, keeping the first occurrence
+        seen.entry(program.manifest_path.clone()).or_insert(program);
+    }
+
+    let mut deduplicated: Vec<SolanaProgram> = seen.into_values().collect();
+
+    // Sort by target_name to ensure consistent alphabetical ordering
+    deduplicated.sort_by(|a, b| a.target_name.cmp(&b.target_name));
+
+    deduplicated
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -157,6 +171,7 @@ mod tests {
             package_name: "my-package".to_string(),
             target_name: "my_target".to_string(),
             manifest_path: PathBuf::from("/path/to/Cargo.toml"),
+            constant_name: "MY_TARGET_ELF".to_string(),
         }
     }
 
@@ -167,29 +182,95 @@ mod tests {
     }
 
     #[test]
-    fn test_constant_name() {
-        let program = sample_program();
-        assert_eq!(program.constant_name(), "MY_TARGET_ELF");
-    }
-
-    #[test]
     fn test_env_var_name_with_hyphens() {
         let program = SolanaProgram {
             package_name: "my-package".to_string(),
             target_name: "my_target_program".to_string(),
             manifest_path: PathBuf::from("/path/to/Cargo.toml"),
+            constant_name: "MY_TARGET_PROGRAM_ELF".to_string(),
         };
         assert_eq!(program.env_var_name(), "MY_TARGET_PROGRAM_ELF_PATH");
     }
 
     #[test]
-    fn test_constant_name_with_hyphens() {
-        let program = SolanaProgram {
-            package_name: "my-package".to_string(),
-            target_name: "my_target_program".to_string(),
-            manifest_path: PathBuf::from("/path/to/Cargo.toml"),
+    fn test_deduplicate_programs_removes_duplicates_by_manifest_path() {
+        // Same program appearing twice (realistic scenario from multiple workspaces)
+        let apl_token_duplicate1 = SolanaProgram {
+            package_name: "apl-token".to_string(),
+            target_name: "apl_token".to_string(),
+            manifest_path: PathBuf::from("/repo/token/Cargo.toml"),
+            constant_name: "APL_TOKEN_ELF".to_string(),
         };
-        assert_eq!(program.constant_name(), "MY_TARGET_PROGRAM_ELF");
+
+        let apl_token_duplicate2 = SolanaProgram {
+            package_name: "apl-token".to_string(),
+            target_name: "apl_token".to_string(),
+            manifest_path: PathBuf::from("/repo/token/Cargo.toml"), // Same path!
+            constant_name: "APL_TOKEN_ELF".to_string(),
+        };
+
+        let escrow_program = SolanaProgram {
+            package_name: "escrow_program".to_string(),
+            target_name: "escrow_program".to_string(),
+            manifest_path: PathBuf::from("/repo/examples/escrow/program/Cargo.toml"),
+            constant_name: "ESCROW_PROGRAM_ELF".to_string(),
+        };
+
+        // Input: 3 programs (with 1 duplicate)
+        let input_programs = vec![
+            escrow_program.clone(),
+            apl_token_duplicate1,
+            apl_token_duplicate2,
+        ];
+        assert_eq!(input_programs.len(), 3);
+
+        // After deduplication: should have 2 unique programs
+        let deduplicated = deduplicate_programs(input_programs);
+        assert_eq!(
+            deduplicated.len(),
+            2,
+            "Should deduplicate to 2 unique programs"
+        );
+
+        // Verify we have one of each program type
+        let apl_token_count = deduplicated
+            .iter()
+            .filter(|p| p.target_name == "apl_token")
+            .count();
+        assert_eq!(
+            apl_token_count, 1,
+            "Should have exactly 1 apl_token after deduplication"
+        );
+
+        let escrow_count = deduplicated
+            .iter()
+            .filter(|p| p.target_name == "escrow_program")
+            .count();
+        assert_eq!(escrow_count, 1, "Should have exactly 1 escrow_program");
+    }
+
+    #[test]
+    fn test_deduplicate_programs_preserves_unique_programs() {
+        let program1 = SolanaProgram {
+            package_name: "package1".to_string(),
+            target_name: "target1".to_string(),
+            manifest_path: PathBuf::from("/workspace/program1/Cargo.toml"),
+            constant_name: "TARGET1_ELF".to_string(),
+        };
+
+        let program2 = SolanaProgram {
+            package_name: "package2".to_string(),
+            target_name: "target2".to_string(),
+            manifest_path: PathBuf::from("/workspace/program2/Cargo.toml"),
+            constant_name: "TARGET2_ELF".to_string(),
+        };
+
+        // Input: 2 unique programs
+        let input_programs = vec![program1, program2];
+        let deduplicated = deduplicate_programs(input_programs);
+
+        // Should preserve both programs
+        assert_eq!(deduplicated.len(), 2, "Should preserve all unique programs");
     }
 
     #[test]
@@ -198,12 +279,14 @@ mod tests {
             package_name: "pkg1".to_string(),
             target_name: "target1".to_string(),
             manifest_path: PathBuf::from("/workspace/Cargo.toml"),
+            constant_name: "MY_TARGET_ELF".to_string(),
         };
 
         let program2 = SolanaProgram {
             package_name: "pkg2".to_string(),
             target_name: "target2".to_string(),
             manifest_path: PathBuf::from("/workspace/Cargo.toml"),
+            constant_name: "MY_TARGET_ELF".to_string(),
         };
 
         let discovered = DiscoveredPrograms {
@@ -228,12 +311,14 @@ mod tests {
             package_name: "included".to_string(),
             target_name: "good_target".to_string(),
             manifest_path: PathBuf::from("/workspace/Cargo.toml"),
+            constant_name: "MY_TARGET_ELF".to_string(),
         };
 
         let excluded_program = SolanaProgram {
             package_name: "excluded".to_string(),
             target_name: "bad_target".to_string(),
             manifest_path: PathBuf::from("/workspace/Cargo.toml"),
+            constant_name: "MY_TARGET_ELF".to_string(),
         };
 
         let discovered = DiscoveredPrograms {
@@ -272,12 +357,14 @@ mod tests {
             package_name: "pkg1".to_string(),
             target_name: "target1".to_string(),
             manifest_path: PathBuf::from("/workspace/Cargo.toml"),
+            constant_name: "MY_TARGET_ELF".to_string(),
         };
 
         let program2 = SolanaProgram {
             package_name: "pkg2".to_string(),
             target_name: "target2".to_string(),
             manifest_path: PathBuf::from("/workspace2/Cargo.toml"),
+            constant_name: "MY_TARGET_ELF".to_string(),
         };
 
         let discovered1 = DiscoveredPrograms {

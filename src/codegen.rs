@@ -1,4 +1,4 @@
-use std::{fs, path::Path};
+use std::{fs, path::Path, process::Command};
 
 use minijinja::{context, Environment};
 
@@ -40,7 +40,7 @@ pub fn generate(build_result: &BuildResult) -> Result<String, Error> {
     // Process successful programs
     for (program, _path) in &build_result.successful {
         let constant = Some(serde_json::json!({
-            "constant_name": program.constant_name(),
+            "constant_name": program.constant_name,
             "env_var": program.env_var_name(),
             "program_name": program.target_name.clone()
         }));
@@ -110,7 +110,33 @@ pub fn save(manifest_dir: &Path, code: &str) -> Result<(), Error> {
     fs::write(&output_path, code).map_err(|e| {
         let message = format!("Failed to write lib.rs: {}", e);
         Error::CodeGeneration(message)
-    })
+    })?;
+
+    // Format the generated code to prevent unexpected changes when users run cargo fmt
+    format_generated_code(manifest_dir, &output_path);
+
+    Ok(())
+}
+
+/// Format generated code with cargo fmt, ignoring errors
+fn format_generated_code(manifest_dir: &Path, file_path: &Path) {
+    let result = Command::new("cargo")
+        .args(["fmt", "--manifest-path"])
+        .arg(manifest_dir.join("Cargo.toml"))
+        .arg("--")
+        .arg(file_path)
+        .output();
+
+    if let Err(e) = result {
+        eprintln!("Warning: Could not run cargo fmt: {}", e);
+    } else if let Ok(output) = result {
+        if !output.status.success() {
+            eprintln!(
+                "Warning: Failed to format generated code: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
 }
 
 #[cfg(test)]
@@ -125,11 +151,13 @@ mod tests {
                 package_name: "package1".to_string(),
                 target_name: "target1".to_string(),
                 manifest_path: PathBuf::from("/path/to/Cargo.toml"),
+                constant_name: "TARGET1_ELF".to_string(),
             },
             SolanaProgram {
                 package_name: "package2".to_string(),
                 target_name: "target2".to_string(),
                 manifest_path: PathBuf::from("/path/to/other/Cargo.toml"),
+                constant_name: "TARGET2_ELF".to_string(),
             },
         ]
     }
@@ -154,6 +182,7 @@ mod tests {
             package_name: "my_package".to_string(),
             target_name: "my_target".to_string(),
             manifest_path: PathBuf::from("/path/to/Cargo.toml"),
+            constant_name: "MY_TARGET_ELF".to_string(),
         }];
 
         let result = generate(&BuildResult {
@@ -212,6 +241,7 @@ mod tests {
             package_name: "my-special-package".to_string(),
             target_name: "my_target_name".to_string(),
             manifest_path: PathBuf::from("/path/to/Cargo.toml"),
+            constant_name: "MY_TARGET_NAME_ELF".to_string(),
         }];
 
         let result = generate(&BuildResult {
@@ -277,12 +307,14 @@ mod tests {
             package_name: "good_package".to_string(),
             target_name: "good_program".to_string(),
             manifest_path: PathBuf::from("/path/to/good/Cargo.toml"),
+            constant_name: "GOOD_PROGRAM_ELF".to_string(),
         };
 
         let failed_program = SolanaProgram {
             package_name: "bad_package".to_string(),
             target_name: "bad_program".to_string(),
             manifest_path: PathBuf::from("/path/to/bad/Cargo.toml"),
+            constant_name: "BAD_PROGRAM_ELF".to_string(),
         };
 
         let build_result = BuildResult {
@@ -319,18 +351,21 @@ mod tests {
             package_name: "zebra".to_string(),
             target_name: "zebra".to_string(),
             manifest_path: PathBuf::from("/path/to/zebra/Cargo.toml"),
+            constant_name: "ZEBRA_ELF".to_string(),
         };
 
         let alpha_program = SolanaProgram {
             package_name: "alpha".to_string(),
             target_name: "alpha".to_string(),
             manifest_path: PathBuf::from("/path/to/alpha/Cargo.toml"),
+            constant_name: "ALPHA_ELF".to_string(),
         };
 
         let beta_program = SolanaProgram {
             package_name: "beta".to_string(),
             target_name: "beta".to_string(),
             manifest_path: PathBuf::from("/path/to/beta/Cargo.toml"),
+            constant_name: "BETA_ELF".to_string(),
         };
 
         // Mix success and failure to test unified sorting
@@ -393,43 +428,48 @@ mod tests {
     #[test]
     fn test_alphabetical_sorting_case_sensitive() {
         let lower_program = SolanaProgram {
-            package_name: "lower".to_string(),
-            target_name: "aaa_program".to_string(),
-            manifest_path: PathBuf::from("/path/to/lower/Cargo.toml"),
+            package_name: "lowercase".to_string(),
+            target_name: "lowercase".to_string(),
+            manifest_path: PathBuf::from("/path/to/lowercase/Cargo.toml"),
+            constant_name: "LOWERCASE_ELF".to_string(),
         };
 
         let upper_program = SolanaProgram {
-            package_name: "upper".to_string(),
-            target_name: "ZZZ_program".to_string(),
-            manifest_path: PathBuf::from("/path/to/upper/Cargo.toml"),
+            package_name: "UPPERCASE".to_string(),
+            target_name: "UPPERCASE".to_string(),
+            manifest_path: PathBuf::from("/path/to/UPPERCASE/Cargo.toml"),
+            constant_name: "UPPERCASE_ELF".to_string(),
         };
 
         let build_result = BuildResult {
             successful: vec![
-                (upper_program, PathBuf::from("/tmp/ZZZ_program.so")),
-                (lower_program, PathBuf::from("/tmp/aaa_program.so")),
+                (upper_program, PathBuf::from("/tmp/UPPERCASE.so")),
+                (lower_program, PathBuf::from("/tmp/lowercase.so")),
             ],
             failed: Vec::new(),
         };
 
         let result = generate(&build_result).unwrap();
 
-        // Build status should be sorted by target_name: ZZZ_program, aaa_program (uppercase comes first in ASCII)
+        // Build status should be sorted by target_name: UPPERCASE, lowercase (uppercase comes first in ASCII)
         let build_status_start = result.find("// Build Status:").unwrap();
         let build_status_section = &result[build_status_start..];
 
-        let zzz_pos = build_status_section.find("// ✓ ZZZ_program").unwrap();
-        let aaa_pos = build_status_section.find("// ✓ aaa_program").unwrap();
-
-        assert!(zzz_pos < aaa_pos, "ZZZ_program should come before aaa_program (uppercase letters come first in ASCII sort)");
-
-        // Constants should follow same order
-        let zzz_const_pos = result.find("pub const ZZZ_PROGRAM_ELF").unwrap();
-        let aaa_const_pos = result.find("pub const AAA_PROGRAM_ELF").unwrap();
+        let uppercase_pos = build_status_section.find("// ✓ UPPERCASE").unwrap();
+        let lowercase_pos = build_status_section.find("// ✓ lowercase").unwrap();
 
         assert!(
-            zzz_const_pos < aaa_const_pos,
-            "ZZZ_PROGRAM_ELF should come before AAA_PROGRAM_ELF"
+            uppercase_pos < lowercase_pos,
+            "UPPERCASE should come before lowercase (uppercase letters come first in ASCII sort)"
+        );
+
+        // Constants should follow same order
+        let uppercase_const_pos = result.find("pub const UPPERCASE_ELF").unwrap();
+        let lowercase_const_pos = result.find("pub const LOWERCASE_ELF").unwrap();
+
+        assert!(
+            uppercase_const_pos < lowercase_const_pos,
+            "UPPERCASE_ELF should come before LOWERCASE_ELF"
         );
     }
 }

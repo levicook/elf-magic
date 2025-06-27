@@ -38,11 +38,15 @@ edition = "2021"
         Config::Permissive {
             workspaces,
             global_deny,
+            constants,
+            targets,
         } => {
             assert_eq!(workspaces.len(), 1);
             assert_eq!(workspaces[0].manifest_path, "./Cargo.toml");
             assert_eq!(workspaces[0].deny.len(), 0);
             assert_eq!(global_deny.len(), 0);
+            assert!(constants.is_empty());
+            assert!(targets.is_empty());
         }
         _ => panic!("Expected Permissive config"),
     }
@@ -83,11 +87,15 @@ edition = "2021"
         Config::Permissive {
             workspaces,
             global_deny,
+            constants,
+            targets,
         } => {
             assert_eq!(workspaces.len(), 1);
             assert_eq!(workspaces[0].manifest_path, "./Cargo.toml");
             assert_eq!(workspaces[0].deny, vec!["target:test*", "package:dev*"]);
             assert_eq!(global_deny.len(), 0);
+            assert!(constants.is_empty());
+            assert!(targets.is_empty());
         }
         _ => panic!("Expected Permissive config"),
     }
@@ -129,11 +137,15 @@ edition = "2021"
         Config::Permissive {
             workspaces,
             global_deny,
+            constants,
+            targets,
         } => {
             assert_eq!(workspaces.len(), 1);
             assert_eq!(workspaces[0].manifest_path, "./Cargo.toml");
             assert_eq!(workspaces[0].deny, vec!["target:test*"]);
             assert_eq!(global_deny, vec!["package:apl-token"]);
+            assert!(constants.is_empty());
+            assert!(targets.is_empty());
         }
         _ => panic!("Expected Permissive config"),
     }
@@ -177,6 +189,8 @@ edition = "2021"
         Config::Permissive {
             workspaces,
             global_deny,
+            constants,
+            targets,
         } => {
             assert_eq!(workspaces.len(), 3);
 
@@ -194,6 +208,9 @@ edition = "2021"
             // Third workspace with different local deny patterns
             assert_eq!(workspaces[2].manifest_path, "tests/Cargo.toml");
             assert_eq!(workspaces[2].deny, vec!["path:*/integration/*"]);
+
+            assert!(constants.is_empty());
+            assert!(targets.is_empty());
         }
         _ => panic!("Expected Permissive config"),
     }

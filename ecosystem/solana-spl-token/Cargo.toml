@@ -1,0 +1,35 @@
+[package]
+name = "elf-magic-solana-spl-token"
+version = "3.4.0"
+edition = "2021"
+description = "Pre-built ELF exports for Solana SPL Token program v3.4.0"
+license = "MIT"
+repository = "https://github.com/levicook/elf-magic"
+keywords = ["solana", "spl", "token", "elf", "ecosystem"]
+
+[dependencies]
+elf-magic = { path = "../.." }
+
+[package.metadata.elf-magic]
+mode = "laser-eyes"
+workspaces = [
+    { manifest_path = "./upstream/Cargo.toml", only = [
+        "path:*/program/*",
+        "path:*/p-token/*",
+    ] },
+]
+
+[package.metadata.elf-magic.constants]
+"./upstream/program/Cargo.toml" = "SPL_TOKEN_PROGRAM_ELF"
+"./upstream/p-token/Cargo.toml" = "SPL_TOKEN_P_TOKEN_ELF"
+
+[package.metadata.upstream]
+repository = "https://github.com/solana-program/token"
+mainnet_version = "3.4.0"
+program_id = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+
+[lib]
+path = "src/lib.rs"
+
+[build-dependencies]
+elf-magic = { path = "../.." }

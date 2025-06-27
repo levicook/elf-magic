@@ -1,4 +1,8 @@
-use std::{fs, path::Path};
+use std::{
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -16,6 +20,10 @@ pub enum Config {
     #[serde(rename = "laser-eyes")]
     LaserEyes {
         workspaces: Vec<LaserEyesWorkspaceConfig>,
+        #[serde(default)]
+        constants: HashMap<String, String>,
+        #[serde(default)]
+        targets: HashMap<String, String>,
     },
 
     #[serde(rename = "permissive")]
@@ -23,6 +31,10 @@ pub enum Config {
         workspaces: Vec<PermissiveWorkspaceConfig>,
         #[serde(default)]
         global_deny: Vec<String>,
+        #[serde(default)]
+        constants: HashMap<String, String>,
+        #[serde(default)]
+        targets: HashMap<String, String>,
     },
 }
 
@@ -59,6 +71,33 @@ impl Config {
             None => Ok(Config::Magic),
         }
     }
+
+    /// Get the mode name as a string
+    pub fn mode_name(&self) -> &'static str {
+        match self {
+            Config::Magic => "magic",
+            Config::LaserEyes { .. } => "laser-eyes",
+            Config::Permissive { .. } => "permissive",
+        }
+    }
+
+    /// Get the constants map for this config
+    pub fn constants(&self) -> HashMap<String, String> {
+        match self {
+            Config::Magic => HashMap::new(),
+            Config::LaserEyes { constants, .. } => constants.clone(),
+            Config::Permissive { constants, .. } => constants.clone(),
+        }
+    }
+
+    /// Get the targets map for this config
+    pub fn targets(&self) -> HashMap<String, String> {
+        match self {
+            Config::Magic => HashMap::new(),
+            Config::LaserEyes { targets, .. } => targets.clone(),
+            Config::Permissive { targets, .. } => targets.clone(),
+        }
+    }
 }
 
 impl Default for Config {
@@ -83,13 +122,43 @@ pub struct PermissiveWorkspaceConfig {
     pub deny: Vec<String>,
 }
 
+/// Resolve constant override paths to absolute paths based on config file location
+pub fn resolve_constants_paths(
+    constants: &HashMap<String, String>,
+    config_file_dir: &Path,
+) -> HashMap<PathBuf, String> {
+    let mut resolved = HashMap::new();
+
+    for (relative_path, constant_name) in constants {
+        let absolute_path = config_file_dir.join(relative_path);
+        resolved.insert(absolute_path, constant_name.clone());
+    }
+
+    resolved
+}
+
+/// Resolve target override paths to absolute paths based on config file location
+pub fn resolve_targets_paths(
+    targets: &HashMap<String, String>,
+    config_file_dir: &Path,
+) -> HashMap<PathBuf, String> {
+    let mut resolved = HashMap::new();
+
+    for (relative_path, target_name) in targets {
+        let absolute_path = config_file_dir.join(relative_path);
+        resolved.insert(absolute_path, target_name.clone());
+    }
+
+    resolved
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::fs;
     use tempfile::TempDir;
 
-    fn create_temp_manifest(content: &str) -> (TempDir, std::path::PathBuf) {
+    fn create_temp_manifest(content: &str) -> (TempDir, PathBuf) {
         let temp_dir = TempDir::new().unwrap();
         let manifest_path = temp_dir.path().join("Cargo.toml");
         fs::write(&manifest_path, content).unwrap();
@@ -159,6 +228,8 @@ workspaces = [
             Config::Permissive {
                 workspaces,
                 global_deny,
+                constants,
+                targets,
             } => {
                 assert_eq!(workspaces.len(), 2);
                 assert_eq!(workspaces[0].manifest_path, "./Cargo.toml");
@@ -166,6 +237,8 @@ workspaces = [
                 assert_eq!(workspaces[1].manifest_path, "examples/basic/Cargo.toml");
                 assert_eq!(workspaces[1].deny, vec!["target:test*"]);
                 assert_eq!(global_deny.len(), 0); // No global excludes in this test
+                assert!(constants.is_empty());
+                assert!(targets.is_empty());
             }
             _ => panic!("Expected Permissive mode"),
         }
@@ -182,7 +255,7 @@ edition = "2021"
 [package.metadata.elf-magic]
 mode = "permissive"
 workspaces = [
-    { manifest_path = "./Cargo.toml", exclude = ["target:test*", "package:dev*"] }
+    { manifest_path = "./Cargo.toml", exclude = ["target:test*"] }
 ]
 "#;
 
@@ -193,10 +266,15 @@ workspaces = [
             Config::Permissive {
                 workspaces,
                 global_deny,
+                constants,
+                targets,
             } => {
                 assert_eq!(workspaces.len(), 1);
-                assert_eq!(workspaces[0].deny, vec!["target:test*", "package:dev*"]);
-                assert_eq!(global_deny.len(), 0); // No global excludes in this test
+                assert_eq!(workspaces[0].manifest_path, "./Cargo.toml");
+                assert_eq!(workspaces[0].deny, vec!["target:test*"]);
+                assert_eq!(global_deny.len(), 0);
+                assert!(constants.is_empty());
+                assert!(targets.is_empty());
             }
             _ => panic!("Expected Permissive mode"),
         }
@@ -205,9 +283,9 @@ workspaces = [
     #[test]
     fn test_load_config_missing_file() {
         let temp_dir = TempDir::new().unwrap();
-        let non_existent = temp_dir.path().join("missing");
+        let non_existent_dir = temp_dir.path().join("non_existent");
 
-        let result = Config::load(&non_existent);
+        let result = Config::load(&non_existent_dir);
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -217,12 +295,12 @@ workspaces = [
 
     #[test]
     fn test_load_config_invalid_toml() {
-        let invalid_toml = r#"
+        let manifest_content = r#"
 [package
-name = "invalid"
+name = "test-package" -- invalid TOML syntax
 "#;
 
-        let (_temp_dir, manifest_dir) = create_temp_manifest(invalid_toml);
+        let (_temp_dir, manifest_dir) = create_temp_manifest(manifest_content);
         let result = Config::load(&manifest_dir);
 
         assert!(result.is_err());
@@ -245,10 +323,8 @@ mode = "invalid-mode"
         let result = Config::load(&manifest_dir);
 
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Invalid elf-magic config"));
+        let error_message = result.unwrap_err().to_string();
+        assert!(error_message.contains("Invalid elf-magic config"));
     }
 
     #[test]
@@ -256,7 +332,7 @@ mode = "invalid-mode"
         let config = Config::default();
         match config {
             Config::Magic => {}
-            _ => panic!("Default should be Magic mode"),
+            _ => panic!("Expected Magic mode as default"),
         }
     }
 
@@ -282,9 +358,13 @@ workspaces = [
             Config::Permissive {
                 workspaces,
                 global_deny,
+                constants,
+                targets,
             } => {
                 assert_eq!(workspaces[0].deny.len(), 0); // Should default to empty
                 assert_eq!(global_deny.len(), 0); // Should default to empty
+                assert!(constants.is_empty());
+                assert!(targets.is_empty());
             }
             _ => panic!("Expected Permissive mode"),
         }
@@ -314,6 +394,8 @@ workspaces = [
             Config::Permissive {
                 workspaces,
                 global_deny,
+                constants,
+                targets,
             } => {
                 assert_eq!(workspaces.len(), 2);
                 assert_eq!(
@@ -328,6 +410,9 @@ workspaces = [
                 // Second workspace has local excludes
                 assert_eq!(workspaces[1].manifest_path, "examples/escrow/Cargo.toml");
                 assert_eq!(workspaces[1].deny, vec!["target:test*"]);
+
+                assert!(constants.is_empty());
+                assert!(targets.is_empty());
             }
             _ => panic!("Expected Permissive mode"),
         }
@@ -353,7 +438,11 @@ workspaces = [
         let config = Config::load(&manifest_dir).unwrap();
 
         match config {
-            Config::LaserEyes { workspaces } => {
+            Config::LaserEyes {
+                workspaces,
+                constants,
+                targets,
+            } => {
                 assert_eq!(workspaces.len(), 2);
 
                 // First workspace
@@ -369,6 +458,9 @@ workspaces = [
                     workspaces[1].only,
                     vec!["target:swap*", "package:my-*-program"]
                 );
+
+                assert!(constants.is_empty());
+                assert!(targets.is_empty());
             }
             _ => panic!("Expected LaserEyes mode"),
         }
@@ -393,10 +485,16 @@ workspaces = [
         let config = Config::load(&manifest_dir).unwrap();
 
         match config {
-            Config::LaserEyes { workspaces } => {
+            Config::LaserEyes {
+                workspaces,
+                constants,
+                targets,
+            } => {
                 assert_eq!(workspaces.len(), 1);
                 assert_eq!(workspaces[0].manifest_path, "./Cargo.toml");
                 assert_eq!(workspaces[0].only, vec!["target:my_program"]);
+                assert!(constants.is_empty());
+                assert!(targets.is_empty());
             }
             _ => panic!("Expected LaserEyes mode"),
         }
@@ -421,10 +519,71 @@ workspaces = [
         let config = Config::load(&manifest_dir).unwrap();
 
         match config {
-            Config::LaserEyes { workspaces } => {
+            Config::LaserEyes {
+                workspaces,
+                constants,
+                targets,
+            } => {
                 assert_eq!(workspaces.len(), 1);
                 assert_eq!(workspaces[0].manifest_path, "./Cargo.toml");
                 assert_eq!(workspaces[0].only.len(), 0);
+                assert!(constants.is_empty());
+                assert!(targets.is_empty());
+            }
+            _ => panic!("Expected LaserEyes mode"),
+        }
+    }
+
+    #[test]
+    fn test_load_config_laser_eyes_mode_with_constants_and_targets() {
+        let manifest_content = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+edition = "2021"
+
+[package.metadata.elf-magic]
+mode = "laser-eyes"
+workspaces = [
+    { manifest_path = "./upstream/Cargo.toml", only = ["path:*/program/*", "path:*/p-token/*"] }
+]
+constants = { "upstream/programs/token/program" = "SPL_TOKEN_PROGRAM_ELF", "upstream/programs/token/p-token" = "SPL_TOKEN_P_TOKEN_ELF" }
+targets = { "upstream/programs/token/p-token" = "potato" }
+"#;
+
+        let (_temp_dir, manifest_dir) = create_temp_manifest(manifest_content);
+        let config = Config::load(&manifest_dir).unwrap();
+
+        match config {
+            Config::LaserEyes {
+                workspaces,
+                constants,
+                targets,
+            } => {
+                assert_eq!(workspaces.len(), 1);
+                assert_eq!(workspaces[0].manifest_path, "./upstream/Cargo.toml");
+                assert_eq!(
+                    workspaces[0].only,
+                    vec!["path:*/program/*", "path:*/p-token/*"]
+                );
+
+                // Check constants
+                assert_eq!(constants.len(), 2);
+                assert_eq!(
+                    constants.get("upstream/programs/token/program"),
+                    Some(&"SPL_TOKEN_PROGRAM_ELF".to_string())
+                );
+                assert_eq!(
+                    constants.get("upstream/programs/token/p-token"),
+                    Some(&"SPL_TOKEN_P_TOKEN_ELF".to_string())
+                );
+
+                // Check targets
+                assert_eq!(targets.len(), 1);
+                assert_eq!(
+                    targets.get("upstream/programs/token/p-token"),
+                    Some(&"potato".to_string())
+                );
             }
             _ => panic!("Expected LaserEyes mode"),
         }

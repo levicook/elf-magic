@@ -1,3 +1,9 @@
+[workspace]
+members = [ #
+    ".",
+    "ecosystem/solana-spl-token",
+]
+
 [package]
 name = "elf-magic"
 version = "0.3.1"
@@ -10,7 +16,6 @@ documentation = "https://github.com/levicook/elf-magic"
 readme = "README.md"
 keywords = ["workspace-automation", "cargo", "elf", "build-tool", "solana"]
 authors = ["Levi Cook <levicook@gmail.com>"]
-license-file = "LICENSE"
 
 [dependencies]
 anyhow = "1.0"

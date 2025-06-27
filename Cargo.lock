@@ -155,6 +155,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "elf-magic-solana-spl-token"
+version = "3.4.0"
+dependencies = [
+ "elf-magic",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

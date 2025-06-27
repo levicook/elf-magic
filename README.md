@@ -2,7 +2,9 @@
 
 > Automatic compile-time ELF exports for Solana programs. One-liner integration, zero config, just works.
 
-🚀 **New in 0.3**: Intuitive configuration language with `only`/`deny` semantics, comprehensive documentation, and laser-eyes precision targeting!
+🚀 **New in 0.4**: Ecosystem packages for instant access to popular Solana programs! Plus enhanced configuration with `constants` and `targets` support.
+
+🌟 **New Ecosystem Packages**: Pre-built ELF exports for popular Solana programs! No more building from source - just add the dependency and go.
 
 Stop wrestling with Solana program builds. `elf-magic` automatically discovers all your programs, builds them, and generates clean Rust code so your ELF bytes are always available as constants.
 
@@ -17,7 +19,7 @@ Add to `my-elves/Cargo.toml`:
 
 ```toml
 [build-dependencies]
-elf-magic = "0.3"
+elf-magic = "0.4"
 ```
 
 Add to `my-elves/build.rs`:
@@ -55,6 +57,16 @@ use my_elves::{TOKEN_MANAGER_ELF, GOVERNANCE_ELF};
 // Deploy, test, embed - whatever you need
 let program_id = deploy_program(TOKEN_MANAGER_ELF)?;
 ```
+
+## Ecosystem Packages 🌟
+
+**NEW**: Pre-built ELF exports for popular Solana programs. Zero build time, just add the dependency.
+
+| Program | Package | Version | What's Included |
+|---------|---------|---------|-----------------|
+| SPL Token | `elf-magic-solana-spl-token` | `3.4.0` | Standard + Pinocchio optimized |
+
+👉 **[Full ecosystem documentation](docs/ecosystem.md)** - Installation, usage examples, roadmap
 
 ## Three Modes for Every Workflow
 
@@ -135,11 +147,12 @@ Add to your ELF crate's `Cargo.toml`:
 
 ```toml
 [build-dependencies]
-elf-magic = "0.3"
+elf-magic = "0.4"
 ```
 
 ## Documentation
 
+- **🌟 [Ecosystem Packages](docs/ecosystem.md)** - Pre-built ELF exports for popular programs
 - **🪄 [Magic Mode](docs/modes/magic.md)** - Zero config auto-discovery
 - **🎛️ [Permissive Mode](docs/modes/permissive.md)** - Multi-workspace with exclusions
 - **🎯 [Laser Eyes Mode](docs/modes/laser-eyes.md)** - Precision targeting
