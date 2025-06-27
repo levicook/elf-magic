@@ -19,4 +19,4 @@ workspaces = [
 "./upstream/elgamal-registry/Cargo.toml" = "SPL_ELGAMAL_REGISTRY_ELF"
 
 [build-dependencies]
-elf-magic = { version = "0.3.1" }
+elf-magic = { path = "../.." }
