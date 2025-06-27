@@ -1,9 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-# Sync ecosystem package with upstream repository
-# Usage: ./scripts/sync-ecosystem-package <ecosystem_name> <version>
-# Example: ./scripts/sync-ecosystem-package solana-spl-token 3.5.0
+# Update ecosystem package to new upstream version
+# Usage: ./scripts/update-ecosystem-package <ecosystem_name> <version>
+# Example: ./scripts/update-ecosystem-package solana-spl-token 3.5.0
 
 if [ $# -ne 2 ]; then
     echo "Usage: $0 <ecosystem_name> <version>" >&2
@@ -32,7 +32,7 @@ if ! echo "$TARGET_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
     exit 1
 fi
 
-echo "🔄 Syncing ecosystem package: $ECOSYSTEM_NAME"
+echo "🔄 Updating ecosystem package: $ECOSYSTEM_NAME"
 
 echo "🎯 Target version: $TARGET_VERSION"
 
@@ -79,7 +79,7 @@ fi
 
 echo "✅ Checked out clean tag: $TAG_NAME"
 
-cd - > /dev/null
+cd - >/dev/null
 
 # Update Cargo.toml version
 echo "📝 Updating package version in Cargo.toml..."
@@ -93,11 +93,11 @@ else
     sed -i "s/Pre-built ELF exports for .* v[0-9]\+\.[0-9]\+\.[0-9]\+/Pre-built ELF exports for $(echo $ECOSYSTEM_NAME | sed 's/-/ /g') v$TARGET_VERSION/" "$CARGO_TOML"
 fi
 
-echo "✅ Submodule synced to v$TARGET_VERSION"
+echo "✅ Package updated to v$TARGET_VERSION"
 echo ""
 echo "Next steps:"
 echo "  1. Review changes: git diff HEAD"
-echo "  2. Validate: make validate-ecosystem-package MANIFEST_PATH=$CARGO_TOML"
-echo "  3. Commit: git add . && git commit -m 'ecosystem: bump $ECOSYSTEM_NAME to v$TARGET_VERSION'"
-echo "  4. Tag: git tag ecosystem/$ECOSYSTEM_NAME/v$TARGET_VERSION"
-echo "  5. Push: git push origin main --tags" 
+echo "  2. Regenerate: cd ecosystem/$ECOSYSTEM_NAME && cargo build"
+echo "  3. Validate: make validate-ecosystem-package MANIFEST_PATH=$CARGO_TOML"
+echo "  4. Commit: git add . && git commit -m 'Update elf-magic-$ECOSYSTEM_NAME to v$TARGET_VERSION'"
+echo "  5. Release: ./scripts/release-ecosystem-package $ECOSYSTEM_NAME $TARGET_VERSION"

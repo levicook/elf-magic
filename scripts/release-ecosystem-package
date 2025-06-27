@@ -1,0 +1,57 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# Script to release (tag + push) existing ecosystem packages
+# Usage: ./scripts/release-ecosystem-package <ecosystem-name> <version>
+# Example: ./scripts/release-ecosystem-package solana-stake 1.0.0
+
+if [ $# -ne 2 ]; then
+    echo "Usage: $0 <ecosystem-name> <version>"
+    echo "Example: $0 solana-stake 1.0.0"
+    exit 1
+fi
+
+ECOSYSTEM_NAME="$1"
+VERSION="$2"
+PACKAGE_DIR="ecosystem/$ECOSYSTEM_NAME"
+MANIFEST_PATH="$PACKAGE_DIR/Cargo.toml"
+
+echo "🚀 Releasing elf-magic-$ECOSYSTEM_NAME v$VERSION"
+
+# Validate inputs
+if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "❌ Error: Version must be in format X.Y.Z (e.g., 1.0.0)"
+    exit 1
+fi
+
+if [ ! -d "$PACKAGE_DIR" ]; then
+    echo "❌ Error: Package directory $PACKAGE_DIR does not exist"
+    exit 1
+fi
+
+if [ ! -f "$MANIFEST_PATH" ]; then
+    echo "❌ Error: Cargo.toml not found at $MANIFEST_PATH"
+    exit 1
+fi
+
+# Final validation before release
+echo "📋 Running final validation..."
+make validate-ecosystem-package MANIFEST_PATH="$MANIFEST_PATH"
+
+# Create tag and push
+TAG="ecosystem/$ECOSYSTEM_NAME/v$VERSION"
+echo "🏷️  Creating tag: $TAG"
+git tag "$TAG"
+
+echo "📤 Pushing tag to origin..."
+git push origin "$TAG"
+
+echo "✅ Tag pushed successfully!"
+echo ""
+echo "🤖 GitHub Actions will now:"
+echo "   - Validate the package"
+echo "   - Publish to crates.io"
+echo "   - Create GitHub release"
+echo ""
+echo "📊 Monitor progress: https://github.com/$(git remote get-url origin | sed 's/.*github.com[:\/]\([^\/]*\/[^.]*\).*/\1/')/actions"

@@ -5,6 +5,8 @@ edition = "2021"
 description = "Pre-built ELF exports for Solana Stake Program v1.0.0"
 license = "MIT"
 
+include = ["build.rs", "Cargo.toml", "src/**/*", "tests/**/*", "upstream/**/*"]
+
 [package.metadata.elf-magic]
 mode = "laser-eyes"
 workspaces = [

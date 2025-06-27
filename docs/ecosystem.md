@@ -137,15 +137,17 @@ A: Automated release process tracks upstream git tags and rebuilds when new vers
 ## Roadmap
 
 **Available now:**
+
 - ✅ SPL Token (Original)
-- ✅ SPL Token 2022 
+- ✅ SPL Token 2022
 - ✅ SPL Associated Token Account
 - ✅ Solana Memo
 - ✅ Solana Stake
 
 **Coming soon:**
+
 - System Program
-- Stake Pool Program  
+- Stake Pool Program
 - Address Lookup Table Program
 - Metaplex programs
 - Pyth Oracle programs
@@ -155,122 +157,134 @@ A: Automated release process tracks upstream git tags and rebuilds when new vers
 
 ## Appendix: For Maintainers
 
-_This section is for people who want to contribute ecosystem packages or understand the release process._
+_This section is for people who maintain ecosystem packages._
 
-### Release Process
+### Three Distinct Workflows
 
-Ecosystem packages use a **maintainer-controlled + GitHub validation** workflow:
+There are **three separate workflows** for ecosystem package management:
 
-**What maintainers do:**
+1. **[Publishing existing packages](#publishing-existing-packages)** - Release already-configured packages to crates.io
+2. **[Updating packages to new versions](#updating-packages-to-new-versions)** - Sync with new upstream releases
+3. **[Adding new packages](#adding-new-packages)** - Bootstrap new ecosystem packages
 
-- Update git submodule to upstream tag
-- Update Cargo.toml version and dependencies
-- Create commit and tag
-- Push to trigger CI
+---
 
-**What GitHub CI does:**
+## Publishing Existing Packages
 
-- Validates the package (build, test, clippy)
-- Publishes to crates.io (only if validation passes)
-- Creates GitHub release with changelog
+**Use case:** You have a properly configured ecosystem package and want to publish it to crates.io.
 
-**Key principle: Maintainers control all file changes. CI only validates and publishes.**
+**Prerequisites:** Package is already configured with correct Cargo.toml, tests, and build.rs.
 
-### How to Release an Ecosystem Package
-
-Example: Releasing `solana-spl-token` version `3.5.0`
-
-1. **Sync submodule and update version**:
-
-   ```bash
-   ./scripts/sync-ecosystem-package solana-spl-token 3.5.0
-   ```
-
-   This cleans the submodule state, checks out the exact upstream tag, and updates the package version.
-
-2. **Generate and review the exported constants**:
-
-   ```bash
-   cd ecosystem/solana-spl-token
-   cargo build
-   # Review generated src/lib.rs - verify expected ELF constants are exported
-   ```
-
-3. **Write validation tests** (required):
-
-   ```rust
-   // Create/update tests/integration.rs - validation will fail without tests
-   use elf_magic_solana_spl_token::*;
-
-   #[test]
-   fn validate_elf_constants() {
-       assert!(!SPL_TOKEN_PROGRAM_ELF.is_empty());
-       assert!(!SPL_TOKEN_P_TOKEN_ELF.is_empty());
-       assert_eq!(&SPL_TOKEN_PROGRAM_ELF[0..4], b"\x7fELF");
-       assert_eq!(&SPL_TOKEN_P_TOKEN_ELF[0..4], b"\x7fELF");
-   }
-   ```
-
-4. **Test the package locally**:
-
-   ```bash
-   # Build and test to verify basic functionality
-   cargo build --package elf-magic-solana-spl-token
-   cargo test --package elf-magic-solana-spl-token
-
-   # Full validation (including publish dry run) happens in CI
-   ```
-
-5. **Commit, tag, and push**:
-
-   ```bash
-   # Stage the submodule commit hash first
-   git add ecosystem/solana-spl-token/upstream
-
-   # Stage other changes
-   git add ecosystem/solana-spl-token/Cargo.toml ecosystem/solana-spl-token/tests/
-
-   # Verify what you're committing
-   git status
-   git diff --cached
-
-   git commit -m "Release elf-magic-solana-spl-token v3.5.0"
-   git tag ecosystem/solana-spl-token/v3.5.0
-   git push origin main ecosystem/solana-spl-token/v3.5.0
-   ```
-
-CI will validate, publish to crates.io, and create a GitHub release.
-
-### Adding New Ecosystem Packages
-
-1. **Create package structure:**
+### Step 1: Validate the Package
 
 ```bash
-mkdir -p ecosystem/your-program-name/src
-touch ecosystem/your-program-name/src/lib.rs
+make validate-ecosystem-package MANIFEST_PATH=ecosystem/solana-stake/Cargo.toml
 ```
 
-2. **Add git submodule:**
+This runs:
+
+- Build verification
+- Test execution
+- Clippy validation
+- Publish dry run
+
+### Step 2: Release and Publish
 
 ```bash
-git submodule add https://github.com/upstream/repo ecosystem/your-program-name/upstream
+./scripts/release-ecosystem-package solana-stake 1.0.0
 ```
 
-3. **Explore the upstream programs:**
+This script will:
+
+- Re-run validation
+- Create git tag: `ecosystem/solana-stake/v1.0.0`
+- Push tag to trigger GitHub Actions
+- GitHub Actions publishes to crates.io
+
+**That's it.** GitHub Actions handles the actual publishing.
+
+---
+
+## Updating Packages to New Versions
+
+**Use case:** Upstream has released a new version and you want to update the ecosystem package.
+
+**Example:** Updating `solana-spl-token` from `3.4.0` → `3.5.0`
+
+### Step 1: Update to New Upstream Version
 
 ```bash
-# Find Solana programs (packages with "cdylib" crate type)
-cargo metadata --no-deps --manifest-path ./ecosystem/your-program-name/upstream/Cargo.toml --format-version 1 | jq '.packages[] | select(.targets[0].crate_types[] == "cdylib") | {name: .name, version: .version, crate_types: .targets[0].crate_types}'
-
-# Note: Some repositories may have duplicate program names across different packages.
-# In this case, you'll need to use path-based discovery and override constants.
+./scripts/update-ecosystem-package solana-spl-token 3.5.0
 ```
 
-4. **Create Cargo.toml** with elf-magic configuration (replace the target names):
+This script:
+
+- Cleans submodule state
+- Checks out upstream tag `v3.5.0`
+- Updates package version in Cargo.toml
+- Updates description
+
+### Step 2: Regenerate and Review
+
+```bash
+cd ecosystem/solana-spl-token
+cargo build
+# Review generated src/lib.rs - verify expected constants
+```
+
+### Step 3: Update Tests (if needed)
+
+```bash
+# Update tests/integration.rs if new programs were added
+```
+
+### Step 4: Validate
+
+```bash
+make validate-ecosystem-package MANIFEST_PATH=ecosystem/solana-spl-token/Cargo.toml
+```
+
+### Step 5: Commit and Release
+
+```bash
+git add ecosystem/solana-spl-token/upstream ecosystem/solana-spl-token/Cargo.toml
+git commit -m "Update elf-magic-solana-spl-token to v3.5.0"
+./scripts/release-ecosystem-package solana-spl-token 3.5.0
+```
+
+---
+
+## Adding New Packages
+
+**Use case:** Creating a brand new ecosystem package for a Solana program.
+
+**Example:** Adding support for `your-program`
+
+### Step 1: Create Package Structure
+
+```bash
+mkdir -p ecosystem/your-program/src
+touch ecosystem/your-program/src/lib.rs
+```
+
+### Step 2: Add Upstream Submodule
+
+```bash
+git submodule add https://github.com/upstream/repo ecosystem/your-program/upstream
+```
+
+### Step 3: Explore Upstream Programs
+
+```bash
+# Find Solana programs in the upstream repository
+cargo metadata --no-deps --manifest-path ./ecosystem/your-program/upstream/Cargo.toml --format-version 1 | jq '.packages[] | select(.targets[0].crate_types[] == "cdylib") | {name: .name, version: .version}'
+```
+
+### Step 4: Create Cargo.toml
 
 ```toml
 [package]
-name = "elf-magic-your-program-name"
+name = "elf-magic-your-program"
 version = "1.0.0"
 edition = "2021"
 description = "Pre-built ELF exports for Your Program v1.0.0"
@@ -279,70 +293,84 @@ license = "MIT"
 [package.metadata.elf-magic]
 mode = "laser-eyes"
 workspaces = [
-    # Simple case: use target names
-    { manifest_path = "./upstream/Cargo.toml", only = ["target:your_program"] },
-
-    # Complex case: use path patterns for repositories with duplicate targets
-    # { manifest_path = "./upstream/Cargo.toml", only = ["path:*/program/*", "path:*/other-program/*"] },
+    { manifest_path = "./upstream/Cargo.toml", only = ["target:your_program"] }
 ]
-
-# For complex cases with duplicates, override constant names
-# [package.metadata.elf-magic.constants]
-# "./upstream/program/Cargo.toml" = "YOUR_MAIN_PROGRAM_ELF"
-# "./upstream/other-program/Cargo.toml" = "YOUR_OTHER_PROGRAM_ELF"
 
 [build-dependencies]
 elf-magic = { version = "0.4" }
 ```
 
-5. **Create supporting files:**
+### Step 5: Create Build Script
 
 ```bash
-# Create build.rs to invoke elf-magic
-cat > ecosystem/your-program-name/build.rs << 'EOF'
+cat > ecosystem/your-program/build.rs << 'EOF'
 fn main() {
     elf_magic::generate().unwrap();
 }
 EOF
+```
 
-# Write failing tests to define expectations based on step 3 research
-cat > ecosystem/your-program-name/tests/integration.rs << 'EOF'
-use elf_magic_your_program_name::*;
+### Step 6: Create Tests
+
+```bash
+cat > ecosystem/your-program/tests/integration.rs << 'EOF'
+use elf_magic_your_program::*;
 
 #[test]
 fn validate_elf_constants() {
-    // TODO: Replace with actual expected constants from step 3
-    // assert!(!YOUR_PROGRAM_ELF.is_empty());
-    // assert_eq!(&YOUR_PROGRAM_ELF[0..4], b"\x7fELF");
+    assert!(!YOUR_PROGRAM_ELF.is_empty());
+    assert_eq!(&YOUR_PROGRAM_ELF[0..4], b"\x7fELF");
 }
 EOF
 ```
 
-6. **Test the package:**
+### Step 7: Test Configuration
 
 ```bash
-# Build to verify configuration works
-cargo build --package elf-magic-your-program-name
-
-# Run tests to verify ELF constants are valid
-cargo test --package elf-magic-your-program-name
-
-# Note: Full validation (including publish dry run) happens in CI
-# where git submodules are properly checked out
+cargo build --package elf-magic-your-program
+cargo test --package elf-magic-your-program
 ```
+
+### Step 8: Add to Workspace and Commit
+
+```bash
+# Add to root Cargo.toml workspace.members (already done with ecosystem/* pattern)
+git add ecosystem/your-program/
+git commit -m "Add elf-magic-your-program ecosystem package"
+```
+
+### Step 9: Validate and Release
+
+```bash
+make validate-ecosystem-package MANIFEST_PATH=ecosystem/your-program/Cargo.toml
+./scripts/release-ecosystem-package your-program 1.0.0
+```
+
+---
+
+### GitHub Actions Workflow
+
+All ecosystem releases use **maintainer-controlled + GitHub validation**:
+
+- **Maintainers:** Configure packages, create tags, push
+- **GitHub Actions:** Validate, publish to crates.io, create releases
+
+**No manual publishing to crates.io.** Everything goes through GitHub Actions for consistency and security.
+
+---
 
 ### Contributing
 
-We welcome ecosystem packages for popular Solana programs! Open an issue or PR to discuss.
+**Criteria for new ecosystem packages:**
 
-**Criteria for inclusion:**
-
-- Program is widely used in the Solana ecosystem
-- Program has stable, tagged releases
-- Program builds successfully with `cargo build-sbf`
-- Upstream repository is well-maintained
+- Program widely used in Solana ecosystem
+- Stable tagged releases available
+- Builds successfully with `cargo build-sbf`
+- Well-maintained upstream repository
 
 **Common challenges:**
 
-- **Duplicate targets**: Some repositories contain multiple programs with the same name. Use path-based discovery (`path:*/program/*`) and override constants. See the [elf-magic configuration docs](../README.md) for details.
-- **Native programs**: Some repositories contain only client code for native/system programs (like compute-budget). These can't be built with `cargo build-sbf`.
+- **Duplicate targets:** Use path-based discovery (`path:*/program/*`)
+- **Native programs:** Some contain only client code (can't be built)
+
+Open an issue to discuss adding new packages.
