@@ -25,7 +25,7 @@ jobs:
         run: |
           # Use make to parse the tag
           eval $(make parse-ecosystem-tag TAG="${GITHUB_REF#refs/tags/}")
-          
+
           # Set GitHub outputs
           echo "ecosystem_name=$ECOSYSTEM_NAME" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -59,8 +59,6 @@ jobs:
 
       - name: Validate ecosystem package
         run: make validate-ecosystem-package MANIFEST_PATH="${{ needs.setup.outputs.manifest_path }}" VERSION="${{ needs.setup.outputs.version }}"
-        env:
-          PATH: ${{ env.PATH }}:$HOME/.local/share/solana/install/active_release/bin
 
   # Publish to crates.io
   publish:
@@ -82,7 +80,6 @@ jobs:
         run: make publish-ecosystem-package MANIFEST_PATH="${{ needs.setup.outputs.manifest_path }}"
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-          PATH: ${{ env.PATH }}:$HOME/.local/share/solana/install/active_release/bin
 
   # Create GitHub release
   github-release:
@@ -93,7 +90,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Create GitHub Release
         run: |
           make create-ecosystem-github-release \
@@ -102,4 +99,4 @@ jobs:
             VERSION="${{ needs.setup.outputs.version }}" \
             TAG="${GITHUB_REF#refs/tags/}"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
