@@ -6,7 +6,7 @@ set -euo pipefail
 
 if [ $# -ne 2 ]; then
     echo "Usage: $0 <submodule_path> <version>" >&2
-    echo "Example: $0 ecosystem/solana-spl-token/upstream 3.4.0" >&2
+    echo "Example: $0 submodules/example-repo 3.4.0" >&2
     exit 1
 fi
 

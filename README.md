@@ -2,39 +2,7 @@
 
 > Automatic compile-time ELF exports for Solana programs. One-liner integration, zero config, just works.
 
-🚀 **New in 0.4**: Ecosystem packages for instant access to popular Solana programs! Plus enhanced configuration with `constants` and `targets` support.
-
-🌟 **New Ecosystem Packages**: Pre-built ELF exports for popular Solana programs! No more building from source - just add the dependency and go.
-
 Stop wrestling with Solana program builds. `elf-magic` automatically discovers all your programs, builds them, and generates clean Rust code so your ELF bytes are always available as constants.
-
-## Ecosystem Packages 🌟
-
-**NEW**: Pre-built ELF exports for popular Solana programs. Zero build time, just add the dependency.
-
-| Program              | Package                                     | Version | What's Included                  |
-| -------------------- | ------------------------------------------- | ------- | -------------------------------- |
-| SPL Token            | `elf-magic-solana-spl-token`                | `3.4.0` | Standard + Pinocchio optimized   |
-| SPL Token 2022       | `elf-magic-solana-token-2022`               | `9.0.0` | Token 2022 + ElGamal Registry    |
-| SPL Associated Token | `elf-magic-solana-associated-token-account` | `7.0.0` | Associated Token Account program |
-| Solana Memo          | `elf-magic-solana-memo`                     | `6.0.0` | Memo + Pinocchio memo programs   |
-| Solana Stake         | `elf-magic-solana-stake`                    | `1.0.0` | Solana Stake program             |
-
-👉 **[Full ecosystem documentation](docs/ecosystem.md)** - Installation, usage examples, roadmap
-
-**Quick ecosystem example:**
-
-```toml
-[dependencies]
-elf-magic-solana-spl-token = "3.4.0"
-```
-
-```rust
-use elf_magic_solana_spl_token::SPL_TOKEN_PROGRAM_ELF;
-
-// Deploy, test, embed - ready to use!
-let program_id = deploy_program(SPL_TOKEN_PROGRAM_ELF)?;
-```
 
 ## Quick Start
 
@@ -65,6 +33,7 @@ cargo build  # magic ✨
 After building, your ELF crate exports constants for every Solana program in your workspace:
 
 **Your hand-written `src/lib.rs`:**
+
 ```rust
 //! ELF binaries for my Solana programs.
 
@@ -72,6 +41,7 @@ include!(env!("ELF_MAGIC_GENERATED_PATH"));
 ```
 
 **Generated at build time (in `$OUT_DIR`):**
+
 ```rust
 pub const TOKEN_MANAGER_ELF: &[u8] = include_bytes!(env!("TOKEN_MANAGER_ELF_PATH"));
 pub const GOVERNANCE_ELF: &[u8] = include_bytes!(env!("GOVERNANCE_ELF_PATH"));
@@ -177,7 +147,6 @@ elf-magic = "0.5"
 
 ## Documentation
 
-- **🌟 [Ecosystem Packages](docs/ecosystem.md)** - Pre-built ELF exports for popular programs
 - **🪄 [Magic Mode](docs/modes/magic.md)** - Zero config auto-discovery
 - **🎛️ [Permissive Mode](docs/modes/permissive.md)** - Multi-workspace with exclusions
 - **🎯 [Laser Eyes Mode](docs/modes/laser-eyes.md)** - Precision targeting
@@ -193,7 +162,7 @@ Works with any workspace layout:
 ```
 my-workspace/
 ├── Cargo.toml            # Workspace root
-├── my-elves/             # Generated ELF exports  
+├── my-elves/             # Generated ELF exports
 │   ├── build.rs          # One-liner magic ✨
 │   └── src/lib.rs        # Hand-written wrapper
 └── programs/

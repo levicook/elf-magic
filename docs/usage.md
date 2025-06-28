@@ -68,29 +68,6 @@ async fn test_with_validator() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### Test with Ecosystem Packages
-
-Mix your generated programs with ecosystem packages:
-
-```rust
-use my_elves::{MY_DEX_ELF, MY_VAULT_ELF};
-use elf_magic_solana_spl_token::SPL_TOKEN_PROGRAM_ELF;
-
-#[test]
-fn test_full_stack() {
-    let programs = vec![
-        ("spl_token", SPL_TOKEN_PROGRAM_ELF),
-        ("my_dex", MY_DEX_ELF),
-        ("my_vault", MY_VAULT_ELF),
-    ];
-
-    for (name, elf) in programs {
-        // Validate all programs
-        assert!(elf.len() > 0, "Program {} is empty", name);
-    }
-}
-```
-
 ## Deployment Scripts
 
 ### Simple Deployment

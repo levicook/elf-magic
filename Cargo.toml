@@ -1,6 +1,3 @@
-[workspace]
-members = [".", "ecosystem/*"]
-
 [package]
 name = "elf-magic"
 version = "0.5.1"
