@@ -12,11 +12,8 @@ if command -v solana >/dev/null 2>&1; then
 fi
 
 # Install Solana CLI
-sh -c "$(curl -sSfL https://release.solana.com/stable/install)"
-
-# Add to PATH for current session
-export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+curl --proto '=https' --tlsv1.2 -sSfL https://solana-install.solana.workers.dev | bash
 
 echo "✅ Solana CLI installed:"
 solana --version
-cargo build-sbf --version 
+cargo build-sbf --version
