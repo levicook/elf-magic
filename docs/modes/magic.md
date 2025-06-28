@@ -20,7 +20,7 @@ version = "0.1.0"
 edition = "2021"
 
 [build-dependencies]
-elf-magic = "0.4"
+elf-magic = "0.5"
 ```
 
 ### Explicit Magic Mode
@@ -34,7 +34,7 @@ edition = "2021"
 mode = "magic"
 
 [build-dependencies]
-elf-magic = "0.4"
+elf-magic = "0.5"
 ```
 
 ## How It Works
@@ -48,17 +48,10 @@ elf-magic = "0.4"
 
 For a workspace with `token_manager` and `governance` programs:
 
+**Your hand-written `src/lib.rs`:**
 ```rust
-// Auto-generated in src/lib.rs
-pub const TOKEN_MANAGER_ELF: &[u8] = include_bytes!(env!("TOKEN_MANAGER_ELF_PATH"));
-pub const GOVERNANCE_ELF: &[u8] = include_bytes!(env!("GOVERNANCE_ELF_PATH"));
-
-pub fn elves() -> Vec<(&'static str, &'static [u8])> {
-    vec![
-        ("token_manager", TOKEN_MANAGER_ELF),
-        ("governance", GOVERNANCE_ELF),
-    ]
-}
+//! ELF binaries for token_manager and governance programs.
+include!(env!("ELF_MAGIC_GENERATED_PATH"));
 ```
 
 ## When to Use Magic Mode
@@ -84,9 +77,9 @@ Magic mode works with any standard Rust workspace:
 my-project/
 ├── Cargo.toml              # Workspace root
 ├── my-elves/               # Your ELF crate
-│   ├── build.rs            # elf_magic::generate().unwrap();
+│   ├── build.rs            # elf_magic::build().unwrap();
 │   ├── Cargo.toml          # Magic mode config (or none)
-│   └── src/lib.rs          # Auto-generated
+│   └── src/lib.rs          # Hand-written wrapper
 └── programs/
     ├── token-manager/      # Solana program
     │   ├── Cargo.toml      # crate-type = ["cdylib"]
@@ -108,7 +101,7 @@ Workspace: ./Cargo.toml
   + token_manager
   + governance
 
-Generated lib.rs with 2 Solana programs
+Generated constants with 2 Solana programs
    Compiling token-manager v0.1.0
    [... cargo build-sbf output ...]
    Compiling governance v0.1.0  
@@ -129,7 +122,7 @@ For more control, consider [Permissive Mode](permissive.md) or [Laser Eyes Mode]
 
 ### No programs found
 ```bash
-⚠️  No Solana programs found - generated empty lib.rs
+⚠️  No Solana programs found - generated empty constants
 ```
 **Solution**: Ensure your programs have `crate-type = ["cdylib"]` in their `Cargo.toml`
 

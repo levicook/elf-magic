@@ -297,7 +297,7 @@ workspaces = [
 ]
 
 [build-dependencies]
-elf-magic = { version = "0.4" }
+elf-magic = { version = "0.5" }
 ```
 
 ### Step 5: Create Build Script
@@ -305,7 +305,7 @@ elf-magic = { version = "0.4" }
 ```bash
 cat > ecosystem/your-program/build.rs << 'EOF'
 fn main() {
-    elf_magic::generate().unwrap();
+    elf_magic::build().unwrap();
 }
 EOF
 ```

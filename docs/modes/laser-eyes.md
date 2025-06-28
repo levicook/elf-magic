@@ -158,7 +158,7 @@ Workspace: examples/defi/Cargo.toml
   + swap_program (matched target:swap*)
   - example_program (not included)
 
-Generated lib.rs with 3 Solana programs
+Generated constants with 3 Solana programs
 ```
 
 ## When to Use Laser Eyes Mode
@@ -183,7 +183,7 @@ Works with any workspace layout:
 my-project/
 ├── Cargo.toml                 # Main workspace
 ├── elves/
-│   ├── build.rs               # elf_magic::generate().unwrap();
+│   ├── build.rs               # elf_magic::build().unwrap();
 │   └── Cargo.toml             # Laser eyes config
 ├── programs/
 │   ├── token-manager/         # ✅ Included via target:token_manager

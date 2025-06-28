@@ -47,13 +47,13 @@ Add to `my-elves/Cargo.toml`:
 
 ```toml
 [build-dependencies]
-elf-magic = "0.4"
+elf-magic = "0.5"
 ```
 
 Add to `my-elves/build.rs`:
 
 ```rust
-fn main() { elf_magic::generate().unwrap(); }
+fn main() { elf_magic::build().unwrap(); }
 ```
 
 ```bash
@@ -62,10 +62,17 @@ cargo build  # magic ✨
 
 ## What You Get
 
-After building, your ELF crate exports generated constants for every Solana program in your workspace:
+After building, your ELF crate exports constants for every Solana program in your workspace:
 
+**Your hand-written `src/lib.rs`:**
 ```rust
-// Generated in src/lib.rs - never edit this file!
+//! ELF binaries for my Solana programs.
+
+include!(env!("ELF_MAGIC_GENERATED_PATH"));
+```
+
+**Generated at build time (in `$OUT_DIR`):**
+```rust
 pub const TOKEN_MANAGER_ELF: &[u8] = include_bytes!(env!("TOKEN_MANAGER_ELF_PATH"));
 pub const GOVERNANCE_ELF: &[u8] = include_bytes!(env!("GOVERNANCE_ELF_PATH"));
 
@@ -140,7 +147,7 @@ Workspace: ./Cargo.toml
   + token_manager
   + governance
 
-Generated lib.rs with 2 Solana programs
+Generated constants with 2 Solana programs
    Compiling token-manager v0.1.0
    Compiling governance v0.1.0
    Compiling my-elves v0.1.0
@@ -165,7 +172,7 @@ Add to your ELF crate's `Cargo.toml`:
 
 ```toml
 [build-dependencies]
-elf-magic = "0.4"
+elf-magic = "0.5"
 ```
 
 ## Documentation
@@ -186,9 +193,9 @@ Works with any workspace layout:
 ```
 my-workspace/
 ├── Cargo.toml            # Workspace root
-├── my-elves/             # Generated ELF exports
+├── my-elves/             # Generated ELF exports  
 │   ├── build.rs          # One-liner magic ✨
-│   └── src/lib.rs        # Auto-generated
+│   └── src/lib.rs        # Hand-written wrapper
 └── programs/
     ├── token-manager/    # Your Solana programs
     └── governance/

@@ -136,7 +136,7 @@ Workspace: examples/basic/Cargo.toml
   + swap_example
   - basic_demo (denied by pattern)
 
-Generated lib.rs with 3 Solana programs
+Generated constants with 3 Solana programs
 ```
 
 ## When to Use Permissive Mode
@@ -161,7 +161,7 @@ Typical multi-workspace setup:
 arch-network/
 ├── Cargo.toml                    # Main workspace
 ├── elves/
-│   ├── build.rs                  # elf_magic::generate().unwrap();
+│   ├── build.rs                  # elf_magic::build().unwrap();
 │   └── Cargo.toml                # Permissive config
 ├── programs/                     # Main programs
 │   ├── orderbook/
@@ -200,7 +200,7 @@ Warning: Invalid deny pattern 'invalid-pattern'. Use 'target:', 'package:', or '
 Use verbose patterns and check global vs local exclusions are correctly configured.
 
 ### No programs included
-If all programs are excluded, you'll get an empty `lib.rs` with warning.
+If all programs are excluded, you'll get empty generated constants with warning.
 
 ---
 
