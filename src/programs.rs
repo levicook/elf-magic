@@ -12,12 +12,12 @@ pub struct SolanaProgram {
 
 /// Result of building multiple Solana programs
 #[derive(Debug)]
-pub struct BuildResult {
+pub struct ProgramBuildResult {
     pub successful: Vec<(SolanaProgram, PathBuf)>,
     pub failed: Vec<(SolanaProgram, Error)>,
 }
 
-impl BuildResult {
+impl ProgramBuildResult {
     pub fn new() -> Self {
         Self {
             successful: Vec::new(),
@@ -68,12 +68,12 @@ pub struct DiscoveredPrograms {
 
 /// Result of the entire generation process with rich reporting
 #[derive(Debug)]
-pub struct GenerationResult {
+pub struct BuildResults {
     pub discovery_mode: String, // "magic", "permissive", or "laser-eyes"
     pub discovered_programs: Vec<DiscoveredPrograms>,
 }
 
-impl fmt::Display for GenerationResult {
+impl fmt::Display for BuildResults {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let total_workspaces = self.discovered_programs.len();
         writeln!(
@@ -124,7 +124,7 @@ impl fmt::Display for GenerationResult {
     }
 }
 
-impl GenerationResult {
+impl BuildResults {
     pub fn new(mode: String, workspace_results: Vec<DiscoveredPrograms>) -> Self {
         Self {
             discovery_mode: mode,
@@ -295,7 +295,7 @@ mod tests {
             excluded: vec![],
         };
 
-        let result = GenerationResult::new("magic".to_string(), vec![discovered]);
+        let result = BuildResults::new("magic".to_string(), vec![discovered]);
         let display = format!("{}", result);
 
         assert!(display.contains("Mode: magic (1 workspace specified)"));
@@ -327,7 +327,7 @@ mod tests {
             excluded: vec![excluded_program],
         };
 
-        let result = GenerationResult::new("permissive".to_string(), vec![discovered]);
+        let result = BuildResults::new("permissive".to_string(), vec![discovered]);
         let display = format!("{}", result);
 
         assert!(display.contains("Mode: permissive"));
@@ -344,7 +344,7 @@ mod tests {
             excluded: vec![],
         };
 
-        let result = GenerationResult::new("magic".to_string(), vec![discovered]);
+        let result = BuildResults::new("magic".to_string(), vec![discovered]);
         let display = format!("{}", result);
 
         assert!(display.contains("(no Solana programs found)"));
@@ -379,8 +379,7 @@ mod tests {
             excluded: vec![],
         };
 
-        let result =
-            GenerationResult::new("permissive".to_string(), vec![discovered1, discovered2]);
+        let result = BuildResults::new("permissive".to_string(), vec![discovered1, discovered2]);
         let programs = result.programs();
 
         assert_eq!(programs.len(), 2);

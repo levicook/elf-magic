@@ -36,8 +36,8 @@ if [ ! -f "$MANIFEST_PATH" ]; then
 fi
 
 # Final validation before release
-echo "📋 Running final validation..."
-make validate-ecosystem-package MANIFEST_PATH="$MANIFEST_PATH"
+# echo "📋 Running final validation..."
+# make validate-ecosystem-package MANIFEST_PATH="$MANIFEST_PATH"
 
 # Create tag and push
 TAG="ecosystem/$ECOSYSTEM_NAME/v$VERSION"

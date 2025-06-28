@@ -79,7 +79,7 @@ validate-ecosystem-package:
 	@echo "📎 Running clippy..."
 	cargo clippy --manifest-path "$(MANIFEST_PATH)"
 	@echo "📦 Publish dry run..."
-	cargo publish --manifest-path "$(MANIFEST_PATH)" --dry-run --no-verify --allow-dirty
+	cargo publish --manifest-path "$(MANIFEST_PATH)" --dry-run --no-verify
 	@echo "✅ Ecosystem package validation passed"
 
 # Publish ecosystem package to crates.io (used by CI)

@@ -1,3 +1,3 @@
 fn main() {
-    elf_magic::generate().unwrap();
+    // elf_magic::generate().unwrap();
 }

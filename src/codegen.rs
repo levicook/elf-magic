@@ -2,7 +2,7 @@ use std::{fs, path::Path, process::Command};
 
 use minijinja::{context, Environment};
 
-use crate::{error::Error, programs::BuildResult};
+use crate::{error::Error, programs::ProgramBuildResult};
 
 /// Template for the generated lib.rs file
 const LIB_RS_TEMPLATE: &str = r#"
@@ -34,7 +34,7 @@ pub fn elves() -> Vec<(&'static str, &'static [u8])> {
 "#;
 
 /// Generate code for Solana programs from build results
-pub fn generate(build_result: &BuildResult) -> Result<String, Error> {
+pub fn generate(build_result: &ProgramBuildResult) -> Result<String, Error> {
     // Collect all programs with render data in one pass
     let mut program_specs: Vec<(String, Option<serde_json::Value>, serde_json::Value)> = Vec::new();
 
@@ -105,13 +105,26 @@ pub fn generate(build_result: &BuildResult) -> Result<String, Error> {
     Ok(rendered_content)
 }
 
-/// Write generated code to lib.rs
+/// Write generated code to OUT_DIR
 pub fn save(manifest_dir: &Path, code: &str) -> Result<(), Error> {
-    let output_path = manifest_dir.join("src").join("lib.rs");
+    // Generate to OUT_DIR instead of src/ (standard Rust pattern)
+    let out_dir = std::env::var("OUT_DIR").map_err(|_| {
+        Error::CodeGeneration(
+            "OUT_DIR not set - this should only be called from build scripts".to_string(),
+        )
+    })?;
+    let output_path = std::path::Path::new(&out_dir).join("generated.rs");
+
     fs::write(&output_path, code).map_err(|e| {
-        let message = format!("Failed to write lib.rs: {}", e);
+        let message = format!("Failed to write generated.rs: {}", e);
         Error::CodeGeneration(message)
     })?;
+
+    // Tell Cargo where the generated file is
+    println!(
+        "cargo:rustc-env=ELF_MAGIC_GENERATED_PATH={}",
+        output_path.display()
+    );
 
     // Format the generated code to prevent unexpected changes when users run cargo fmt
     format_generated_code(manifest_dir, &output_path);
@@ -165,7 +178,7 @@ mod tests {
 
     #[test]
     fn test_generate_empty_programs() {
-        let result = generate(&BuildResult {
+        let result = generate(&ProgramBuildResult {
             successful: Vec::new(),
             failed: Vec::new(),
         })
@@ -186,7 +199,7 @@ mod tests {
             constant_name: "MY_TARGET_ELF".to_string(),
         }];
 
-        let result = generate(&BuildResult {
+        let result = generate(&ProgramBuildResult {
             successful: programs
                 .iter()
                 .map(|p| (p.clone(), PathBuf::from("/path/to/Cargo.toml")))
@@ -210,7 +223,7 @@ mod tests {
     #[test]
     fn test_generate_multiple_programs() {
         let programs = sample_programs();
-        let result = generate(&BuildResult {
+        let result = generate(&ProgramBuildResult {
             successful: programs
                 .iter()
                 .map(|p| (p.clone(), PathBuf::from("/path/to/Cargo.toml")))
@@ -245,7 +258,7 @@ mod tests {
             constant_name: "MY_TARGET_NAME_ELF".to_string(),
         }];
 
-        let result = generate(&BuildResult {
+        let result = generate(&ProgramBuildResult {
             successful: programs
                 .iter()
                 .map(|p| (p.clone(), PathBuf::from("/path/to/Cargo.toml")))
@@ -265,7 +278,7 @@ mod tests {
     #[test]
     fn test_generated_code_is_valid_rust() {
         let programs = sample_programs();
-        let result = generate(&BuildResult {
+        let result = generate(&ProgramBuildResult {
             successful: programs
                 .iter()
                 .map(|p| (p.clone(), PathBuf::from("/path/to/Cargo.toml")))
@@ -295,7 +308,7 @@ mod tests {
         // This is harder to test without breaking the template
         // But we can at least verify the function signature works
         let _programs: Vec<SolanaProgram> = vec![];
-        let result = generate(&BuildResult {
+        let result = generate(&ProgramBuildResult {
             successful: Vec::new(),
             failed: Vec::new(),
         });
@@ -318,7 +331,7 @@ mod tests {
             constant_name: "BAD_PROGRAM_ELF".to_string(),
         };
 
-        let build_result = BuildResult {
+        let build_result = ProgramBuildResult {
             successful: vec![(successful_program, PathBuf::from("/tmp/good_program.so"))],
             failed: vec![(
                 failed_program,
@@ -370,7 +383,7 @@ mod tests {
         };
 
         // Mix success and failure to test unified sorting
-        let build_result = BuildResult {
+        let build_result = ProgramBuildResult {
             successful: vec![
                 (zebra_program, PathBuf::from("/tmp/zebra.so")),
                 (beta_program, PathBuf::from("/tmp/beta.so")),
@@ -442,7 +455,7 @@ mod tests {
             constant_name: "UPPERCASE_ELF".to_string(),
         };
 
-        let build_result = BuildResult {
+        let build_result = ProgramBuildResult {
             successful: vec![
                 (upper_program, PathBuf::from("/tmp/UPPERCASE.so")),
                 (lower_program, PathBuf::from("/tmp/lowercase.so")),

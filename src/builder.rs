@@ -1,18 +1,18 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use crate::{
     error::Error,
-    programs::{BuildResult, SolanaProgram},
+    programs::{ProgramBuildResult, SolanaProgram},
 };
 
 /// Build multiple Solana programs, collecting both successes and failures
 ///
 /// Returns build results containing successfully built programs and any failures.
 /// This allows partial success - some programs can build while others fail.
-pub fn build_programs(programs: &[SolanaProgram]) -> BuildResult {
-    let mut result = BuildResult::new();
+pub fn build_programs(programs: &[SolanaProgram]) -> ProgramBuildResult {
+    let mut result = ProgramBuildResult::new();
 
     for program in programs {
         match build_program(program) {
@@ -98,13 +98,7 @@ pub fn build_program(program: &SolanaProgram) -> Result<PathBuf, Error> {
 }
 
 /// Enable incremental builds for each program
-pub fn enable_incremental_builds(
-    manifest_dir: &Path,
-    programs: &[SolanaProgram],
-) -> Result<(), Error> {
-    let output_path = manifest_dir.join("src").join("lib.rs");
-    println!("cargo:rerun-if-changed={}", output_path.display());
-
+pub fn enable_incremental_builds(programs: &[SolanaProgram]) -> Result<(), Error> {
     for program in programs {
         let program_root = program.manifest_path.parent().unwrap();
         println!("cargo:rerun-if-changed={}", program_root.display());

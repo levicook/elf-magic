@@ -10,11 +10,16 @@ use std::{env, path::PathBuf};
 use crate::{
     config::Config,
     error::Error,
-    programs::{deduplicate_programs, GenerationResult, SolanaProgram},
+    programs::{deduplicate_programs, BuildResults, SolanaProgram},
 };
 
+#[deprecated(note = "use build() instead")]
+pub fn generate() -> Result<BuildResults, Error> {
+    build()
+}
+
 /// Generate Rust bindings for Solana programs
-pub fn generate() -> Result<GenerationResult, Error> {
+pub fn build() -> Result<BuildResults, Error> {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR")
         .map(PathBuf::from)
         .map_err(|e| Error::WorkspaceDiscovery(format!("CARGO_MANIFEST_DIR not set: {}", e)))?;
@@ -39,9 +44,9 @@ pub fn generate() -> Result<GenerationResult, Error> {
     let code = codegen::generate(&build_result)?;
     codegen::save(&cargo_manifest_dir, &code)?;
 
-    builder::enable_incremental_builds(&cargo_manifest_dir, &included_programs)?;
+    builder::enable_incremental_builds(&included_programs)?;
 
-    Ok(GenerationResult::new(
+    Ok(BuildResults::new(
         config.mode_name().to_string(),
         discovered_programs,
     ))
