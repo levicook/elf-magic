@@ -55,7 +55,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install Solana CLI
-        run: make install-solana
+        run: |
+          make install-solana
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
 
       - name: Validate ecosystem package
         run: make validate-ecosystem-package MANIFEST_PATH="${{ needs.setup.outputs.manifest_path }}" VERSION="${{ needs.setup.outputs.version }}"
