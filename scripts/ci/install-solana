@@ -11,8 +11,8 @@ if command -v solana >/dev/null 2>&1; then
     exit 0
 fi
 
-# Install Solana CLI
-curl --proto '=https' --tlsv1.2 -sSfL https://solana-install.solana.workers.dev | bash
+# Install Solana CLI using Anza installer
+sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
 
 echo "✅ Solana CLI installed:"
 solana --version
