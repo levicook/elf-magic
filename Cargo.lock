@@ -140,6 +140,8 @@ dependencies = [
 [[package]]
 name = "elf-magic"
 version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e597ae9dc7a7acd7783b999f832ea00081c340a2d77b5b75dc745c5ef069f95e"
 dependencies = [
  "anyhow",
  "cargo_metadata",
@@ -155,9 +157,7 @@ dependencies = [
 
 [[package]]
 name = "elf-magic"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e597ae9dc7a7acd7783b999f832ea00081c340a2d77b5b75dc745c5ef069f95e"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "cargo_metadata",
@@ -175,35 +175,35 @@ dependencies = [
 name = "elf-magic-solana-associated-token-account"
 version = "7.0.0"
 dependencies = [
- "elf-magic 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "elf-magic 0.4.0",
 ]
 
 [[package]]
 name = "elf-magic-solana-memo"
 version = "6.0.0"
 dependencies = [
- "elf-magic 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "elf-magic 0.4.0",
 ]
 
 [[package]]
 name = "elf-magic-solana-spl-token"
 version = "3.4.0"
 dependencies = [
- "elf-magic 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "elf-magic 0.4.0",
 ]
 
 [[package]]
 name = "elf-magic-solana-stake"
 version = "1.0.0"
 dependencies = [
- "elf-magic 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "elf-magic 0.4.0",
 ]
 
 [[package]]
 name = "elf-magic-solana-token-2022"
 version = "9.0.0"
 dependencies = [
- "elf-magic 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "elf-magic 0.4.0",
 ]
 
 [[package]]
