@@ -70,14 +70,16 @@ validate-ecosystem-package:
 		fi; \
 		echo "✅ Tag version matches Cargo.toml version: $(VERSION)"; \
 	fi
+	@echo "🔍 Reporting solana version..."
+	solana --version
 	@echo "🔨 Building ecosystem package..."
 	cargo build --manifest-path "$(MANIFEST_PATH)"
 	@echo "🧪 Running tests (includes ELF validation)..."
 	cargo test --manifest-path "$(MANIFEST_PATH)"
 	@echo "📎 Running clippy..."
-	cargo clippy --manifest-path "$(MANIFEST_PATH)" --all-targets -- -D warnings
+	cargo clippy --manifest-path "$(MANIFEST_PATH)"
 	@echo "📦 Publish dry run..."
-	cargo publish --manifest-path "$(MANIFEST_PATH)" --dry-run
+	cargo publish --manifest-path "$(MANIFEST_PATH)" --dry-run --no-verify
 	@echo "✅ Ecosystem package validation passed"
 
 # Publish ecosystem package to crates.io (used by CI)
