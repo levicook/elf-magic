@@ -2,10 +2,9 @@
 name = "elf-magic-solana-stake"
 version = "1.0.0"
 edition = "2021"
-description = "Pre-built ELF exports for Solana Stake Program v1.0.0"
+description = "Pre-built ELF exports for Solana Stake Program"
 license = "MIT"
-
-include = ["build.rs", "Cargo.toml", "src/**/*", "tests/**/*", "upstream/**/*"]
+keywords = ["elf-magic", "solana", "stake-program"]
 
 [package.metadata.elf-magic]
 mode = "laser-eyes"
@@ -16,4 +15,4 @@ workspaces = [
 ]
 
 [build-dependencies]
-elf-magic = { version = "0.4" }
+elf-magic = { version = "0.5" }

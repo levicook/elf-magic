@@ -2,10 +2,10 @@
 name = "elf-magic-solana-spl-token"
 version = "3.4.0"
 edition = "2021"
-description = "Pre-built ELF exports for Solana SPL Token program v3.4.0"
+description = "Pre-built ELF exports for Solana SPL Token program"
 license = "MIT"
 repository = "https://github.com/levicook/elf-magic"
-keywords = ["solana", "spl", "token", "elf", "ecosystem"]
+keywords = ["elf-magic", "solana", "spl-token-program"]
 
 [package.metadata.elf-magic]
 mode = "laser-eyes"
@@ -22,11 +22,6 @@ workspaces = [
 
 [package.metadata.upstream]
 repository = "https://github.com/solana-program/token"
-mainnet_version = "3.4.0"
-program_id = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-
-[lib]
-path = "src/lib.rs"
 
 [build-dependencies]
-elf-magic = { version = "0.4" }
+elf-magic = { version = "0.5" }

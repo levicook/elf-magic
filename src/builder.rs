@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use crate::{
@@ -98,7 +98,15 @@ pub fn build_program(program: &SolanaProgram) -> Result<PathBuf, Error> {
 }
 
 /// Enable incremental builds for each program
-pub fn enable_incremental_builds(programs: &[SolanaProgram]) -> Result<(), Error> {
+pub fn enable_incremental_builds(
+    manifest_dir: &Path,
+    programs: &[SolanaProgram],
+) -> Result<(), Error> {
+    // Watch the lib.rs file (now hand-written, not generated)
+    let src_path = manifest_dir.join("src");
+    println!("cargo:rerun-if-changed={}", src_path.display());
+
+    // Watch the upstream programs that we're building
     for program in programs {
         let program_root = program.manifest_path.parent().unwrap();
         println!("cargo:rerun-if-changed={}", program_root.display());

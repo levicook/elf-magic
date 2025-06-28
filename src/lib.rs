@@ -44,7 +44,7 @@ pub fn build() -> Result<BuildResults, Error> {
     let code = codegen::generate(&build_result)?;
     codegen::save(&cargo_manifest_dir, &code)?;
 
-    builder::enable_incremental_builds(&included_programs)?;
+    builder::enable_incremental_builds(&cargo_manifest_dir, &included_programs)?;
 
     Ok(BuildResults::new(
         config.mode_name().to_string(),

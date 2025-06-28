@@ -2,8 +2,9 @@
 name = "elf-magic-solana-memo"
 version = "6.0.0"
 edition = "2021"
-description = "Pre-built ELF exports for Solana Memo Program v6.0.0"
+description = "Pre-built ELF exports for Solana Memo Program"
 license = "MIT"
+keywords = ["elf-magic", "solana", "memo-program"]
 
 [package.metadata.elf-magic]
 mode = "laser-eyes"
@@ -14,5 +15,8 @@ workspaces = [
     ] },
 ]
 
+[package.metadata.upstream]
+repository = "https://github.com/solana-program/memo"
+
 [build-dependencies]
-elf-magic = { version = "0.4" }
+elf-magic = { version = "0.5" }

@@ -2,8 +2,9 @@
 name = "elf-magic-solana-token-2022"
 version = "9.0.0"
 edition = "2021"
-description = "Pre-built ELF exports for SPL Token 2022 v9.0.0"
+description = "Pre-built ELF exports for SPL Token 2022"
 license = "MIT"
+keywords = ["elf-magic", "solana", "token-2022-program"]
 
 [package.metadata.elf-magic]
 mode = "laser-eyes"
@@ -19,4 +20,4 @@ workspaces = [
 "./upstream/elgamal-registry/Cargo.toml" = "SPL_ELGAMAL_REGISTRY_ELF"
 
 [build-dependencies]
-elf-magic = { version = "0.4" }
+elf-magic = { version = "0.5" }

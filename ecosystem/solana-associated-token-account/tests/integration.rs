@@ -1,10 +1,10 @@
-use elf_magic_solana_stake::*;
+use elf_magic_solana_associated_token_account::*;
 
 #[test]
 fn validate_elf_constants() {
-    // Test SOLANA_STAKE_PROGRAM_ELF - Solana Stake program
-    assert!(!SOLANA_STAKE_PROGRAM_ELF.is_empty());
-    assert_eq!(&SOLANA_STAKE_PROGRAM_ELF[0..4], b"\x7fELF");
+    // Test SPL_ASSOCIATED_TOKEN_ACCOUNT_ELF
+    assert!(!SPL_ASSOCIATED_TOKEN_ACCOUNT_ELF.is_empty());
+    assert_eq!(&SPL_ASSOCIATED_TOKEN_ACCOUNT_ELF[0..4], b"\x7fELF");
 }
 
 #[test]
@@ -12,11 +12,11 @@ fn validate_elves_function() {
     let programs = elves();
     assert_eq!(programs.len(), 1);
 
-    // Check that the stake program is included
+    // Check that the program is included
     let program_names: Vec<&str> = programs.iter().map(|(name, _)| *name).collect();
-    assert!(program_names.contains(&"solana_stake_program"));
+    assert!(program_names.contains(&"spl_associated_token_account"));
 
-    // Verify the ELF binary is valid
+    // Verify ELF binary is valid
     for (name, elf_bytes) in programs {
         assert!(!elf_bytes.is_empty(), "ELF binary for {} is empty", name);
         assert_eq!(
